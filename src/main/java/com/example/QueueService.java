@@ -1,6 +1,6 @@
 package com.example;
 
-import java.io.IOException;
+import java.util.List;
 
 public interface QueueService {
 
@@ -19,4 +19,31 @@ public interface QueueService {
   // - delete
   //   deletes a message from the queue that was received by pull().
   //
+
+    // CreateQueueResult	createQueue(String queueName)
+    QueueAttributes createQueue(String queueName);
+
+    // CreateQueueResult	createQueue(CreateQueueRequest createQueueRequest)
+    QueueAttributes createQueue(QueueAttributes queueAttributes);
+
+    // ListQueuesResult	listQueues()
+    List<QueueAttributes> listQueues();
+
+    // GetQueueUrlResult	getQueueUrl(String queueName)
+    String getQueueUrl(String queueName);
+
+    // DeleteQueueResult	deleteQueue(String queueUrl)
+    boolean deleteQueue(String queueUrl);
+
+    // SendMessageResult	sendMessage(String queueUrl, String messageBody)
+    QueueMessage push(String queueUrl, String message);
+
+    // ReceiveMessageResult	receiveMessage(String queueUrl)
+    QueueMessage pull(String queueUrl);
+
+    // DeleteMessageResult	deleteMessage(String queueUrl, String receiptHandle)
+    boolean delete(String queueUrl, String receiptId);
+
+    // ChangeMessageVisibilityResult	changeMessageVisibility(String queueUrl, String receiptHandle, Integer visibilityTimeout)
+    boolean changeMessageVisibilitiy(String queueUrl, String receiptId, Integer visibilityTimeout);
 }
