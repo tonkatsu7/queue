@@ -1,8 +1,6 @@
 package com.example;
 
 import com.amazonaws.services.sqs.AmazonSQSClient;
-import com.amazonaws.services.sqs.model.ReceiveMessageResult;
-import com.amazonaws.services.sqs.model.SendMessageResult;
 
 import java.util.List;
 
@@ -19,17 +17,12 @@ public class SqsQueueService implements QueueService {
   }
 
   @Override
-  public QueueAttributes createQueue(String queueName) {
+  public String createQueue(String queueName) {
     return null;
   }
 
   @Override
-  public QueueAttributes createQueue(QueueAttributes queueAttributes) {
-    return null;
-  }
-
-  @Override
-  public List<QueueAttributes> listQueues() {
+  public List<String> listQueues() {
     return null;
   }
 
@@ -54,12 +47,7 @@ public class SqsQueueService implements QueueService {
   }
 
   @Override
-  public boolean delete(String queueUrl, String receiptId) {
-    return false;
-  }
-
-  @Override
-  public boolean changeMessageVisibilitiy(String queueUrl, String receiptId, Integer visibilityTimeout) {
+  public boolean deleteMessage(String queueUrl, String receiptId) {
     return false;
   }
 }
