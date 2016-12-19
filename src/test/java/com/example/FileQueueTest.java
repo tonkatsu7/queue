@@ -53,7 +53,7 @@ public class FileQueueTest {
     @BeforeClass
     public static void setupAllTests() {
         File dir = Paths.get(Paths.get("").toAbsolutePath().toString(), TEST_DIR).toFile();
-        System.out.println("Preparing root dir: " + dir.getAbsolutePath());
+//        System.out.println("Preparing root dir: " + dir.getAbsolutePath());
         dir.mkdir();
         testRootDir = dir;
     }
@@ -74,17 +74,17 @@ public class FileQueueTest {
 
     private static File createUnitTestDir() {
         File testDir = Paths.get(testRootDir.getAbsolutePath(), String.valueOf(System.currentTimeMillis())).toFile();
-        System.out.println("Preparing dir: " + testDir.getAbsolutePath());
+//        System.out.println("Preparing dir: " + testDir.getAbsolutePath());
         testDir.mkdir();
         return testDir;
     }
 
     private static void cleanupDirectory(File testDir) throws IOException {
-        System.out.println("Cleaning up dir:");
+//        System.out.println("Cleaning up dir:");
         Files.walk(Paths.get(testDir.getAbsolutePath()), FileVisitOption.FOLLOW_LINKS)
                 .sorted(Comparator.reverseOrder())
                 .map(Path::toFile)
-                .peek(System.out::println)
+//                .peek(System.out::println)
                 .forEach(File::delete);
     }
 
@@ -628,7 +628,6 @@ public class FileQueueTest {
     }
 
     @Test
-    @Ignore
     public void pulling_from_a_queue_with_no_messages_returns_empty_message() {
         // Given a service with a single queue but no messages
         setupFirstQueue();
@@ -641,7 +640,6 @@ public class FileQueueTest {
     }
 
     @Test(expected = IllegalStateException.class)
-    @Ignore
     public void cannot_pull_from_service_with_no_queues() {
         // Given a service with no queues
 
@@ -652,7 +650,6 @@ public class FileQueueTest {
     }
 
     @Test(expected = IllegalStateException.class)
-    @Ignore
     public void cannot_pull_from_non_existent_queue() {
         // Given a service with a single queue
         setupFirstQueue();
@@ -672,7 +669,6 @@ public class FileQueueTest {
     }
 
     @Test(expected = NullPointerException.class)
-    @Ignore
     public void cannot_pull_with_null_url() {
         // Given a service with a single queue
         setupFirstQueue();
@@ -684,7 +680,6 @@ public class FileQueueTest {
     }
 
     @Test(expected = IllegalArgumentException.class)
-    @Ignore
     public void cannot_pull_with_empty_url() {
         // Given a service with a single queue
         setupFirstQueue();
@@ -700,7 +695,6 @@ public class FileQueueTest {
     // Method: boolean deleteMessage(String queueUrl, String receiptId);
 
     @Test
-    @Ignore
     public void can_delete_a_single_message_from_a_single_queue() {
         // Given a service with a single queue and a single pushed then pulled message
         setupFirstQueue();
@@ -712,11 +706,11 @@ public class FileQueueTest {
 
         // Then subsequent pull returns empty message
         Assert.assertEquals("Delete message operation should be successful", true, actual);
+        System.out.println(actual);
         Assert.assertEquals("Pulling from a queue of 1 message after a delete should return an empty message", true, target.pull(FIRST_QUEUE_URL).isEmpty());
     }
 
     @Test
-    @Ignore
     public void can_delete_messages_from_2_queues() {
         // Given a service with 2 queues each with 1 message pushed and pulled
         setupFirstAndSecondQueues();
@@ -746,7 +740,6 @@ public class FileQueueTest {
 
     // TOOD rewrite using a Timer task
     @Test
-    @Ignore
     public void cannot_delete_message_after_visibility_timout_elapsed() throws InterruptedException {
         // Given a service with a single queue and a single pushed then pulled message
         setupFirstQueue();
@@ -773,7 +766,6 @@ public class FileQueueTest {
     }
 
     @Test
-    @Ignore
     public void cannot_delete_message_with_incorrect_receipt_id() throws InterruptedException {
         // Given a service with a single queue and a single pushed then pulled message
         setupFirstQueue();
@@ -790,7 +782,6 @@ public class FileQueueTest {
     }
 
     @Test(expected = IllegalStateException.class)
-    @Ignore
     public void cannot_delete_message_from_a_service_with_no_queues() {
         // Given a service with a single queue and a pushed and pulled message
 
@@ -801,7 +792,6 @@ public class FileQueueTest {
     }
 
     @Test(expected = IllegalStateException.class)
-    @Ignore
     public void cannot_delete_message_from_a_non_existent_queues() {
         // Given a service with a single queue and a pushed and pulled message
         setupFirstQueue();
@@ -823,7 +813,6 @@ public class FileQueueTest {
     }
 
     @Test(expected = NullPointerException.class)
-    @Ignore
     public void cannot_delete_message_with_null_url() {
         // Given a service with a single queue and a pushed and pulled message
         setupFirstQueue();
@@ -837,7 +826,6 @@ public class FileQueueTest {
     }
 
     @Test(expected = IllegalArgumentException.class)
-    @Ignore
     public void cannot_delete_message_with_empty_url() {
         // Given a service with a single queue and a pushed and pulled message
         setupFirstQueue();
@@ -859,7 +847,6 @@ public class FileQueueTest {
     }
 
     @Test(expected = NullPointerException.class)
-    @Ignore
     public void cannot_delete_message_with_null_receipt_id() {
         // Given a service with a single queue and a pushed and pulled message
         setupFirstQueue();
@@ -873,7 +860,6 @@ public class FileQueueTest {
     }
 
     @Test(expected = IllegalArgumentException.class)
-    @Ignore
     public void cannot_delete_message_with_empty_receipt_id() {
         // Given a service with a single queue and a pushed and pulled message
         setupFirstQueue();
@@ -891,7 +877,6 @@ public class FileQueueTest {
     // Concurrency tests
 
     @Test
-    @Ignore
     public void a_single_queue_supports_multiple_producers_and_consumers() throws InterruptedException {
         // Given 2 producers producing 9 messages each
         setupFirstQueue();
@@ -909,7 +894,10 @@ public class FileQueueTest {
             for (int i=0; i<6; i++) {
 //                QueueMessage message = target.pull(FIRST_QUEUE_URL);
 //                actualPulledMessagesSet.add(message.getReceiptId());
-                target.pull(FIRST_QUEUE_URL);
+                QueueMessage message = target.pull(FIRST_QUEUE_URL);
+                System.out.println(message);
+                if (!message.isEmpty())
+                    target.deleteMessage(FIRST_QUEUE_URL, message.getReceiptId());
             }
         };
 
@@ -966,6 +954,7 @@ public class FileQueueTest {
         Runnable consumerFirstQueue = () -> {
             for (int i=0; i<4; i++) {
                 QueueMessage message = target.pull(FIRST_QUEUE_URL);
+                target.deleteMessage(FIRST_QUEUE_URL, message.getReceiptId());
 //                actualPulledMessagesSet.add(message.getReceiptId());
 //                System.out.println(FIRST_QUEUE_URL + " - C" + i + " : " + message.getMessageId()); // DEBUG
             }
@@ -974,6 +963,7 @@ public class FileQueueTest {
         Runnable consumerSecondQueue = () -> {
             for (int i=0; i<4; i++) {
                 QueueMessage message = target.pull(SECOND_QUEUE_URL);
+                target.deleteMessage(SECOND_QUEUE_URL, message.getReceiptId());
 //                actualPulledMessagesSet.add(message.getReceiptId());
 //                System.out.println(SECOND_QUEUE_URL + " - C" + i + " : " + message.getMessageId()); // DEBUG
             }

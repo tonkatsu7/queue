@@ -851,7 +851,9 @@ public class InMemoryQueueTest {
             for (int i=0; i<400; i++) {
 //                QueueMessage message = target.pull(FIRST_QUEUE_URL);
 //                actualPulledMessagesSet.add(message.getReceiptId());
-                target.pull(FIRST_QUEUE_URL);
+                QueueMessage message = target.pull(FIRST_QUEUE_URL);
+                if (!message.isEmpty())
+                    target.deleteMessage(FIRST_QUEUE_URL, message.getReceiptId());
             }
         };
 
@@ -922,6 +924,7 @@ public class InMemoryQueueTest {
         Runnable consumerFirstQueue = () -> {
             for (int i=0; i<4; i++) {
                 QueueMessage message = target.pull(FIRST_QUEUE_URL);
+                target.deleteMessage(FIRST_QUEUE_URL, message.getReceiptId());
 //                actualPulledMessagesSet.add(message.getReceiptId());
 //                System.out.println(FIRST_QUEUE_URL + " - C" + i + " : " + message.getMessageId()); // DEBUG
             }
@@ -930,6 +933,7 @@ public class InMemoryQueueTest {
         Runnable consumerSecondQueue = () -> {
             for (int i=0; i<4; i++) {
                 QueueMessage message = target.pull(SECOND_QUEUE_URL);
+                target.deleteMessage(SECOND_QUEUE_URL, message.getReceiptId());
 //                actualPulledMessagesSet.add(message.getReceiptId());
 //                System.out.println(SECOND_QUEUE_URL + " - C" + i + " : " + message.getMessageId()); // DEBUG
             }
