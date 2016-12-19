@@ -16,6 +16,7 @@ public class QueueMessageTest {
     private static final String MESSAGE_BODY_1 = "My message body";
     private static final String MESSAGE_ID_1 = "5fea7756-0ea4-451a-a703-a558b933e274";
     private static final String RECEIPT_ID_1 = "MbZj6wDWli+JvwwJaBV+3dcjk2YW2vA3+STFFljTM8tJJg6HRG6PYSasuWXPJB+CwLj1FjgXUv1uSj1gUPAWV66FU/WeR4mq2OKpEGYWbnLmpRCJVAyeMjeU5ZBdtcQ+QEauMZc8ZRv37sIW2iJKq3M9MFx1YvV11A2x/KSbkJ0=";
+    private static final long VISIBILITY_TIMEOUT = 0;
 
     private QueueMessage target;
 
@@ -28,7 +29,7 @@ public class QueueMessageTest {
     }
 
     private QueueMessage setupPulledQueueMessage() {
-        return new QueueMessage(setupPushedQueueMessage(), RECEIPT_ID_1);
+        return new QueueMessage(setupPushedQueueMessage(), RECEIPT_ID_1, VISIBILITY_TIMEOUT); // TODO
     }
 
     // Constructor: QueueMessage()
@@ -111,7 +112,7 @@ public class QueueMessageTest {
         QueueMessage dequeuedMessageFixture = setupPushedQueueMessage();
 
         // When calling the (QueueMessage, String) messaged constructor
-        target = new QueueMessage(dequeuedMessageFixture, RECEIPT_ID_1);
+        target = new QueueMessage(dequeuedMessageFixture, RECEIPT_ID_1, VISIBILITY_TIMEOUT);
 
         // Then the string is assigned to the message body, message id and receipt id fields
         Assert.assertEquals("Test target is not null when calling constructor", true, !Objects.isNull(target));
@@ -126,7 +127,7 @@ public class QueueMessageTest {
         QueueMessage nullQueueMessageFixture = null;
 
         // When calling the (QueueMessage, String) messaged constructor
-        target = new QueueMessage(nullQueueMessageFixture, RECEIPT_ID_1);
+        target = new QueueMessage(nullQueueMessageFixture, RECEIPT_ID_1, VISIBILITY_TIMEOUT);
 
         // Then null pointer exception
     }
@@ -137,7 +138,7 @@ public class QueueMessageTest {
         QueueMessage emptyQueueMessageFixture = setupEmptyQueueMessage();
 
         // When calling the (QueueMessage, String) messaged constructor
-        target = new QueueMessage(emptyQueueMessageFixture, RECEIPT_ID_1);
+        target = new QueueMessage(emptyQueueMessageFixture, RECEIPT_ID_1, VISIBILITY_TIMEOUT);
 
         // Then null pointer exception
     }
@@ -148,7 +149,7 @@ public class QueueMessageTest {
         QueueMessage dequeuedMessageFixture = setupPushedQueueMessage();
 
         // When calling the (QueueMessage, String) messaged constructor
-        target = new QueueMessage(dequeuedMessageFixture, NULL_STRING);
+        target = new QueueMessage(dequeuedMessageFixture, NULL_STRING, VISIBILITY_TIMEOUT);
 
         // Then null pointer exception
     }
@@ -159,10 +160,12 @@ public class QueueMessageTest {
         QueueMessage dequeuedMessageFixture = setupPushedQueueMessage();
 
         // When calling the (QueueMessage, String) messaged constructor
-        target = new QueueMessage(dequeuedMessageFixture, EMPTY_STRING);
+        target = new QueueMessage(dequeuedMessageFixture, EMPTY_STRING, VISIBILITY_TIMEOUT);
 
         // Then null pointer exception
     }
+
+    // TODO visibility timeout is +1, 0, -1
 
     // Getter: String getMessageBody() has no logic so we won't test
 

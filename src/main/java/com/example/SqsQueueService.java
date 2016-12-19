@@ -2,7 +2,7 @@ package com.example;
 
 import com.amazonaws.services.sqs.AmazonSQSClient;
 
-import java.util.List;
+import java.util.Set;
 
 public class SqsQueueService implements QueueService {
   //
@@ -22,7 +22,7 @@ public class SqsQueueService implements QueueService {
   }
 
   @Override
-  public List<String> listQueues() {
+  public Set<String> listQueues() {
     return null;
   }
 
@@ -32,8 +32,8 @@ public class SqsQueueService implements QueueService {
   }
 
   @Override
-  public boolean deleteQueue(String queueUrl) {
-    return false;
+  public void deleteQueue(String queueUrl) {
+
   }
 
   @Override

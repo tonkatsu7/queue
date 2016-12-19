@@ -1,7 +1,5 @@
 package com.example;
 
-import com.google.common.base.Optional;
-
 import static com.google.common.base.Preconditions.*;
 
 /**
@@ -15,6 +13,7 @@ public class QueueMessage {
     private String receiptId; // 1024 char
 //    private String deduplicationId; // optional, 128 char, [a-zA-Z0-9!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~]
 //    private String groupId; // same as deduplicationId, required by SQS for FIFO
+    private long visibilityTimeoutFrom;
 
     /**
      * Intended for when pull operation receives no message or when push is unable to
@@ -24,6 +23,7 @@ public class QueueMessage {
         messageBody = EMPTY;
         messageId = EMPTY;
         receiptId = EMPTY;
+        visibilityTimeoutFrom = 0;
     }
 
     /**
@@ -36,14 +36,15 @@ public class QueueMessage {
      *         an empty string
      */
     public QueueMessage(String messageBody, String messageId) {
-        checkNotNull(messageBody, "Message body cannot be null");
-        checkArgument(!messageBody.trim().isEmpty(), "Message body cannot be an empty string");
-        checkNotNull(messageId, "Message ID cannot be null");
-        checkArgument(!messageId.trim().isEmpty(), "Message ID cannot be an empty string");
+//        checkNotNull(messageBody, "Message body cannot be null");
+//        checkArgument(!messageBody.trim().isEmpty(), "Message body cannot be an empty string");
+//        checkNotNull(messageId, "Message ID cannot be null");
+//        checkArgument(!messageId.trim().isEmpty(), "Message ID cannot be an empty string");
 
-        this.messageBody = messageBody;
-        this.messageId = messageId;
+        this.messageBody = QueueServiceUtil.checkMessageBody(messageBody);
+        this.messageId = QueueServiceUtil.checkMessageId(messageId);
         this.receiptId = EMPTY;
+        this.visibilityTimeoutFrom = 0;
     }
 
     /**
@@ -51,16 +52,20 @@ public class QueueMessage {
      *
      * @param dequeued
      * @param receiptId the receipt ID of a pulled message
+     * @param visibilityTimeoutFrom
      * @throws NullPointerException if the specified receipt ID is null
      * @throws IllegalArgumentException if the specified receipt ID is an empty string
      */
-    public QueueMessage(QueueMessage dequeued, String receiptId) {
+    public QueueMessage(QueueMessage dequeued, String receiptId, long visibilityTimeoutFrom) {
         this(checkNotNull(dequeued, "Dequeued cannot be null").getMessageBody(),
                 dequeued.getMessageId());
-        checkNotNull(receiptId, "Receipt ID cannot be null");
-        checkArgument(!receiptId.trim().isEmpty(), "Receipt ID cannot be an empty string");
+//        checkNotNull(receiptId, "Receipt ID cannot be null");
+//        checkArgument(!receiptId.trim().isEmpty(), "Receipt ID cannot be an empty string");
 
-        this.receiptId = receiptId;
+        this.receiptId = QueueServiceUtil.checkReceiptId(receiptId);
+
+        checkArgument(visibilityTimeoutFrom >= 0, "Visibility timeout from cannot be a negative number");
+        this.visibilityTimeoutFrom = visibilityTimeoutFrom;
     }
 
     public String getMessageBody() {
@@ -75,6 +80,8 @@ public class QueueMessage {
         return receiptId;
     }
 
+    public long getVisibilityTimeoutFrom() { return visibilityTimeoutFrom; }
+
     /**
      * @return if queue message is empty
      */
@@ -87,14 +94,23 @@ public class QueueMessage {
      * @param obj the other queue message to test equality
      * @return true if both message bodies are equal
      */
-//    @Override
-//    public boolean equals(Object obj) {
-//        if (!(obj instanceof QueueMessage))
-//            return false;
-//
-//        QueueMessage other = (QueueMessage) obj;
-//
-//        return other.getMessageId().equalsIgnoreCase(messageId) && other.getMessageBody().equals(messageBody);
-//        return false;
-//    }
+    @Override
+    public boolean equals(Object obj) {
+        if (!(obj instanceof QueueMessage))
+            return false;
+
+        QueueMessage other = (QueueMessage) obj;
+
+        return other.getMessageId().equalsIgnoreCase(messageId) && other.getMessageBody().equals(messageBody);
+    }
+
+    @Override
+    public String toString() {
+        return "QueueMessage{" +
+                "messageBody='" + messageBody + '\'' +
+                ", messageId='" + messageId + '\'' +
+                ", receiptId='" + receiptId + '\'' +
+                ", visibilityTimeoutFrom=" + visibilityTimeoutFrom +
+                '}';
+    }
 }

@@ -1,6 +1,7 @@
 package com.example;
 
-import java.util.List;
+import java.io.IOException;
+import java.util.Set;
 
 public interface QueueService {
 
@@ -46,13 +47,12 @@ public interface QueueService {
     /**
      * Maps to {@code ListQueuesResult	listQueues()} in SQS.
      *
-     * <p>Fetches a list of all the the queues (common) names. The queue
-     * names is commonly passed into {@code getQueueUrl} to lookup the
-     * queue URL for use with message operations.
+     * <p>Fetches a list of all the the queues URLs. The queue URL can
+     * be used with message operations.
      *
      * @return a list of queue names
      */
-    List<String> listQueues();
+    Set<String> listQueues();
 
     /**
      * Maps to {@code GetQueueUrlResult	getQueueUrl(String queueName)}
@@ -85,18 +85,17 @@ public interface QueueService {
      * with SQS behaviour. Any messages remaining in the queue will be lost.
      *
      * @param queueUrl the queue URL
-     * @return true if the operation was successful
      * @throws NullPointerException if the specified queue URL is null
      * @throws IllegalArgumentException is the specified queue URL is an
      *         empty string
      */
-    boolean deleteQueue(String queueUrl);
+    void deleteQueue(String queueUrl);
 
     /**
      * Maps to {@code SendMessageResult	sendMessage(String queueUrl, String messageBody)}
      * in SQS.
      *
-     * <p>Pushes a message to the specified queue
+     * <p>Pushes a message to the specified queue.
      *
      * @param queueUrl the queue URL
      * @param message the message body
@@ -109,8 +108,6 @@ public interface QueueService {
      *         or message body is empty
      * @throws IllegalStateException if the specified queue URL does not
      *         exist
-     * @throws java.util.ConcurrentModificationException if the specified
-     *         queue is deleted during the operation
      */
     QueueMessage push(String queueUrl, String message);
 
@@ -130,8 +127,6 @@ public interface QueueService {
      *         empty string
      * @throws IllegalStateException if the specified queue URL does not
      *         exist
-     * @throws java.util.ConcurrentModificationException if the specified
-     *         queue is deleted during the operation
      */
     QueueMessage pull(String queueUrl);
 
@@ -152,8 +147,6 @@ public interface QueueService {
      *         or receipt ID is empty
      * @throws IllegalStateException if the specified queue URL does not
      *         exist
-     * @throws java.util.ConcurrentModificationException if the specified
-     *         queue is deleted during the operation
      */
     boolean deleteMessage(String queueUrl, String receiptId);
 
