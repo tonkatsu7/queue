@@ -1,20 +1,23 @@
 package com.example;
 
-import com.amazonaws.AmazonClientException;
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.profile.ProfileCredentialsProvider;
 import com.amazonaws.services.sqs.AmazonSQSClient;
+import com.amazonaws.services.sqs.model.CreateQueueRequest;
 import com.amazonaws.services.sqs.model.DeleteMessageRequest;
 import com.amazonaws.services.sqs.model.DeleteQueueRequest;
-import com.amazonaws.services.sqs.model.GetQueueUrlResult;
 import com.amazonaws.services.sqs.model.InvalidMessageContentsException;
 import com.amazonaws.services.sqs.model.Message;
+import com.amazonaws.services.sqs.model.QueueDeletedRecentlyException;
+import com.amazonaws.services.sqs.model.QueueDoesNotExistException;
+import com.amazonaws.services.sqs.model.QueueNameExistsException;
 import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.amazonaws.services.sqs.model.SendMessageResult;
 import com.amazonaws.services.sqs.model.UnsupportedOperationException;
 
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public class SqsQueueService implements QueueService {
@@ -30,60 +33,48 @@ public class SqsQueueService implements QueueService {
     private static long VISIBILITY_TIMEOUT_EMPTY;
 
     // Fields
-    private AWSCredentials credentials;
     private AmazonSQSClient sqs;
     private String groupId;
 
-    public SqsQueueService(AmazonSQSClient sqsClient) {
-//        try {
-//            credentials = new ProfileCredentialsProvider().getCredentials();
-//        } catch (Exception e) {
-//            throw new AmazonClientException(
-//                    "Can't load the credentials from the credential profiles file. " +
-//                    "Please make sure that your credentials file is at the correct " +
-//                    "location (~/.aws/credentials), and is a in valid format.",
-//                    e);
-//        }
-//        sqs = new AmazonSQSClient(credentials);
-//        sqs.setEndpoint("https://sqs.us-east-2.amazonaws.com");
+    public SqsQueueService(AmazonSQSClient sqsClient, String groupId) {
+        this.sqs = sqsClient;
+        this.groupId = groupId;
     }
 
     @Override
     public String createQueue(String queueName) {
-//        // Create a FIFO queue
-//        System.out.println("Creating a new Amazon SQS FIFO queue called MyFifoQueue.fifo.\n");
-//        Map<String, String> attributes = new HashMap<String, String>();
-//        // A FIFO queue must have the FifoQueue attribute set to True
-//        attributes.put("FifoQueue", "true");
-//        // Generate a MessageDeduplicationId based on the content, if the user doesn't provide a MessageDeduplicationId
-//        attributes.put("ContentBasedDeduplication", "true");
-//        // The FIFO queue name must end with the .fifo suffix
-//        CreateQueueRequest createQueueRequest = new CreateQueueRequest("MyFifoQueue.fifo").withAttributes(attributes);
-//        String myQueueUrl = sqs.createQueue(createQueueRequest).getQueueUrl();
-//
-//        // List queues
-//        System.out.println("Listing all queues in your account.\n");
-//        for (String queueUrl : sqs.listQueues().getQueueUrls()) {
-//            System.out.println("  QueueUrl: " + queueUrl);
-//        }
-//        System.out.println();
-        return null;
+        // Create a FIFO queue
+        Map<String, String> attributes = new HashMap<String, String>();
+        // A FIFO queue must have the FifoQueue attribute set to True
+        attributes.put("FifoQueue", "true");
+        // Generate a MessageDeduplicationId based on the content, if the user doesn't provide a MessageDeduplicationId
+        attributes.put("ContentBasedDeduplication", "true");
+        // The FIFO queue name must end with the .fifo suffix
+        CreateQueueRequest createQueueRequest = new CreateQueueRequest(queueName).withAttributes(attributes);
+        String queueUrl;
+        try {
+            queueUrl = sqs.createQueue(createQueueRequest).getQueueUrl();
+        } catch (QueueDeletedRecentlyException e) {
+            throw new IllegalStateException(e); // TODO add to interface
+        } catch (QueueNameExistsException e) {
+            throw new IllegalStateException("Unexpected duplicate queue name error in SqsQueueService method createQueue", e); // TODO add to interface
+        }
+        return queueUrl;
     }
 
     @Override
     public Set<String> listQueues() {
-//        // List queues
-//        System.out.println("Listing all queues in your account.\n");
-//        for (String queueUrl : sqs.listQueues().getQueueUrls()) {
-//            System.out.println("  QueueUrl: " + queueUrl);
-//        }
-//        System.out.println();
-        return null;
+        // List queues
+        return new HashSet<>(sqs.listQueues().getQueueUrls());
     }
 
     @Override
     public String getQueueUrl(String queueName) {
-        return sqs.getQueueUrl(queueName).getQueueUrl();
+        try {
+            return sqs.getQueueUrl(queueName).getQueueUrl();
+        } catch (QueueDoesNotExistException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     @Override
@@ -130,7 +121,7 @@ public class SqsQueueService implements QueueService {
 
         for (Message message : messages) {
             return new QueueMessage(new QueueMessage(message.getBody(), message.getMessageId()),
-                    message.getReceiptHandle(), VISIBILITY_TIMEOUT_EMPTY); // whoops, see notes // TODO
+                    message.getReceiptHandle(), VISIBILITY_TIMEOUT_EMPTY); // whoops, see notes // TODO add notes
         }
 
         return result;
