@@ -615,7 +615,7 @@ public class FileQueueTest {
             for (String messageBody : QUEUE_MESSAGES
                     ) {
                 QueueMessage pulledMessage = target.pull(url);
-                System.out.println(pulledMessage);
+//                System.out.println(pulledMessage);
                 if (!pulledMessage.isEmpty())
                     actualPulledMessageCount[i]++;
             }
@@ -892,7 +892,7 @@ public class FileQueueTest {
         // When 3 consumers
         Set<QueueMessage> actualPulledMessagesSet = new HashSet<>();
         Runnable consumer = () -> {
-            for (int i=0; i<10; i++) {
+            for (int i=0; i<12; i++) {
 //                QueueMessage message = target.pull(FIRST_QUEUE_URL);
 //                actualPulledMessagesSet.add(message.getReceiptId());
                 QueueMessage message = target.pull(FIRST_QUEUE_URL);
@@ -952,7 +952,7 @@ public class FileQueueTest {
         // When 3 consumers
         Set<QueueMessage> actualPulledMessagesSet = new HashSet<>();
         Runnable consumerFirstQueue = () -> {
-            for (int i=0; i<4; i++) {
+            for (int i=0; i<6; i++) {
                 QueueMessage message = target.pull(FIRST_QUEUE_URL);
                 if (!message.isEmpty())
                     target.deleteMessage(FIRST_QUEUE_URL, message.getReceiptId());
@@ -962,7 +962,7 @@ public class FileQueueTest {
         };
 
         Runnable consumerSecondQueue = () -> {
-            for (int i=0; i<4; i++) {
+            for (int i=0; i<6; i++) {
                 QueueMessage message = target.pull(SECOND_QUEUE_URL);
                 if (!message.isEmpty())
                     target.deleteMessage(SECOND_QUEUE_URL, message.getReceiptId());
