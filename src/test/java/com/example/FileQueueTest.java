@@ -22,7 +22,7 @@ import java.util.Set;
 public class FileQueueTest {
     private static final String TEST_DIR = "fileQueueRoot";
     private static final long PULL_WAIT_TIME_MILLIS = 100L;
-    private static final long VISIBILITY_TIMEOUT_MILLIS = 500L;
+    private static final long VISIBILITY_TIMEOUT_MILLIS = 250L;
     private static final String URL_PREFIX = "http://sqs.us-east-2.amazonaws.com/123456789012/";
 
     private static final String FIRST_QUEUE_NAME = "MyQueue";
@@ -615,6 +615,7 @@ public class FileQueueTest {
             for (String messageBody : QUEUE_MESSAGES
                     ) {
                 QueueMessage pulledMessage = target.pull(url);
+                System.out.println(pulledMessage);
                 if (!pulledMessage.isEmpty())
                     actualPulledMessageCount[i]++;
             }
@@ -706,7 +707,7 @@ public class FileQueueTest {
 
         // Then subsequent pull returns empty message
         Assert.assertEquals("Delete message operation should be successful", true, actual);
-        System.out.println(actual);
+//        System.out.println(actual);
         Assert.assertEquals("Pulling from a queue of 1 message after a delete should return an empty message", true, target.pull(FIRST_QUEUE_URL).isEmpty());
     }
 
@@ -747,7 +748,7 @@ public class FileQueueTest {
         QueueMessage pulledMessageFixture = target.pull(FIRST_QUEUE_URL);
 
         // DEBUG
-        System.out.println(pulledMessageFixture);
+//        System.out.println(pulledMessageFixture);
         Thread.sleep(VISIBILITY_TIMEOUT_MILLIS);
 
         // When delete
@@ -755,8 +756,8 @@ public class FileQueueTest {
 
         // DEBUG
         QueueMessage m = target.pull(FIRST_QUEUE_URL);
-        System.out.println(m);
-        System.out.println(pulledMessageFixture.equals(m));
+//        System.out.println(m);
+//        System.out.println(pulledMessageFixture.equals(m));
 
         // Then subsequent pull returns empty message
         Assert.assertEquals("Delete message operation should be unsuccessful", false, actual);
@@ -882,7 +883,7 @@ public class FileQueueTest {
         setupFirstQueue();
         Set<QueueMessage> pushedMessagesSetFixture = new HashSet<>();
         Runnable producer = () -> {
-            for (int i=0; i<9; i++) {
+            for (int i=0; i<15; i++) {
 //                pushedMessagesSetFixture.add(target.push(FIRST_QUEUE_URL, QUEUE_MESSAGE_1 + i));
                 target.push(FIRST_QUEUE_URL, QUEUE_MESSAGE_1 + i);
             }
@@ -891,11 +892,11 @@ public class FileQueueTest {
         // When 3 consumers
         Set<QueueMessage> actualPulledMessagesSet = new HashSet<>();
         Runnable consumer = () -> {
-            for (int i=0; i<6; i++) {
+            for (int i=0; i<10; i++) {
 //                QueueMessage message = target.pull(FIRST_QUEUE_URL);
 //                actualPulledMessagesSet.add(message.getReceiptId());
                 QueueMessage message = target.pull(FIRST_QUEUE_URL);
-                System.out.println(message);
+//                System.out.println(message);
                 if (!message.isEmpty())
                     target.deleteMessage(FIRST_QUEUE_URL, message.getReceiptId());
             }
@@ -918,7 +919,7 @@ public class FileQueueTest {
         consumerThread1.join();
         consumerThread2.join();
         consumerThread3.join();
-
+//
         // Then resulting pulled messages should equal those originally pushed
 //        Assert.assertEquals("The set of pushed messages is a subset of the pulled messages (but likely the equivalent set)",
 //                true, actualPulledMessagesSet.containsAll(pushedMessagesSetFixture));
@@ -928,7 +929,6 @@ public class FileQueueTest {
     }
 
     @Test
-    @Ignore
     public void multiple_queues_supports_multiple_producers_and_consumers() throws InterruptedException {
         // Given 2 producers producing 9 messages each
         setupFirstAndSecondQueues();
@@ -954,7 +954,8 @@ public class FileQueueTest {
         Runnable consumerFirstQueue = () -> {
             for (int i=0; i<4; i++) {
                 QueueMessage message = target.pull(FIRST_QUEUE_URL);
-                target.deleteMessage(FIRST_QUEUE_URL, message.getReceiptId());
+                if (!message.isEmpty())
+                    target.deleteMessage(FIRST_QUEUE_URL, message.getReceiptId());
 //                actualPulledMessagesSet.add(message.getReceiptId());
 //                System.out.println(FIRST_QUEUE_URL + " - C" + i + " : " + message.getMessageId()); // DEBUG
             }
@@ -963,7 +964,8 @@ public class FileQueueTest {
         Runnable consumerSecondQueue = () -> {
             for (int i=0; i<4; i++) {
                 QueueMessage message = target.pull(SECOND_QUEUE_URL);
-                target.deleteMessage(SECOND_QUEUE_URL, message.getReceiptId());
+                if (!message.isEmpty())
+                    target.deleteMessage(SECOND_QUEUE_URL, message.getReceiptId());
 //                actualPulledMessagesSet.add(message.getReceiptId());
 //                System.out.println(SECOND_QUEUE_URL + " - C" + i + " : " + message.getMessageId()); // DEBUG
             }

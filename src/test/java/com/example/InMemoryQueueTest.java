@@ -704,7 +704,7 @@ public class InMemoryQueueTest {
         QueueMessage pulledMessageFixture = target.pull(FIRST_QUEUE_URL);
 
         // DEBUG
-        System.out.println(pulledMessageFixture);
+//        System.out.println(pulledMessageFixture);
         Thread.sleep(VISIBILITY_TIMEOUT_MILLIS);
 
         // When delete
@@ -712,8 +712,8 @@ public class InMemoryQueueTest {
 
         // DEBUG
         QueueMessage m = target.pull(FIRST_QUEUE_URL);
-        System.out.println(m);
-        System.out.println(pulledMessageFixture.equals(m));
+//        System.out.println(m);
+//        System.out.println(pulledMessageFixture.equals(m));
 
         // Then subsequent pull returns empty message
         Assert.assertEquals("Delete message operation should be unsuccessful", false, actual);
