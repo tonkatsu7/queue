@@ -87,15 +87,22 @@ public class FileQueueService implements QueueService {
     public Set<String> listQueues() {
         // count the directory names under root dir
         File rootDir = getRootDir();
+        File rootLock = getRootLock();
         Set<String> queueUrls = new HashSet<>();
+        File[] directories;
 
-        File[] directories = rootDir.listFiles(File::isDirectory);
-
-        for (File dir : directories) {
-            String directory = dir.getName();
-            if (!directory.startsWith(".")) {
-                queueUrls.add(toUrl(directory));
+        try {
+            lock(rootLock);
+            directories = rootDir.listFiles(File::isDirectory);
+            for (File dir : directories) {
+                String directory = dir.getName();
+                if (!directory.startsWith(".")) {
+                    queueUrls.add(toUrl(directory));
+                }
             }
+            unlock(rootLock);
+        } catch (InterruptedException e) {
+            Throwables.propagate(e);
         }
 
         return queueUrls;
@@ -165,7 +172,7 @@ public class FileQueueService implements QueueService {
             } catch (IOException e) {
                 Throwables.propagate(e);
             } finally {
-                unlock(queueLock); // TODO
+                unlock(queueLock);
             }
         } catch (InterruptedException e) {
             Throwables.propagate(e);
@@ -336,7 +343,7 @@ public class FileQueueService implements QueueService {
         boolean pullOrDeleteHasOccurred = false;
 
         for (String line = br.readLine(); line != null; line = br.readLine()) {
-            String[] parts = line.split(":");
+            String[] parts = line.split(":", 5);
 
             // e.g. 0:0:614c58b8-c319-4137-a1da-eb0b75fa19a2:02fa4094-2a2d-4677-a1c9-89bf9420cb1a:{"media":"MABJsxUmBps",...}
             boolean inFlight = (Integer.parseInt(parts[INT_FLIGHT_INDEX]) == 1) ? true : false;// [0] in flight 0=false, 1=true

@@ -70,7 +70,9 @@ public class InMemoryQueueService implements QueueService {
 
         checkState(queueUrl2Names.values().contains(queueName), QUEUE_NAME_DOES_NOT_EXIST);
 
-        return queueUrl2Names.inverse().get(queueName);
+        synchronized (mainLock) {
+            return queueUrl2Names.inverse().get(queueName);
+        }
     }
 
     @Override

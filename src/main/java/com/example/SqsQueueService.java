@@ -130,6 +130,6 @@ public class SqsQueueService implements QueueService {
     public boolean deleteMessage(String queueUrl, String receiptId) {
         // Delete the message
         sqs.deleteMessage(new DeleteMessageRequest(queueUrl, receiptId));
-        return true; // whoops, see notes // TODO remove from interface
+        return true; // see notes
     }
 }

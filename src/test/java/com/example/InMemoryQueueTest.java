@@ -33,7 +33,7 @@ public class InMemoryQueueTest {
     private static final String EMPTY_QUEUE_URL = " ";
 
     private static final String QUEUE_MESSAGE_1 = "My queue message";
-    private static final String QUEUE_MESSAGE_2 = "My queue message 2";
+    private static final String QUEUE_MESSAGE_2 = "{\"message\":\"My message 2\",...}";
     private static final String[] QUEUE_MESSAGES = new String [] {QUEUE_MESSAGE_1, QUEUE_MESSAGE_2,
                                                                     QUEUE_MESSAGE_1 + " 3", QUEUE_MESSAGE_1 + " 4", QUEUE_MESSAGE_1 + " 5"};
 

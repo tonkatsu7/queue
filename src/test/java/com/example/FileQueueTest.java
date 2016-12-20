@@ -43,10 +43,9 @@ public class FileQueueTest {
     private static final String EMPTY_QUEUE_URL = " ";
 
     private static final String QUEUE_MESSAGE_1 = "My queue message";
-    private static final String QUEUE_MESSAGE_2 = "My queue message 2";
+    private static final String QUEUE_MESSAGE_2 = "{\"message\":\"My message 2\",...}";
     private static final String[] QUEUE_MESSAGES = new String [] {QUEUE_MESSAGE_1, QUEUE_MESSAGE_2,
             QUEUE_MESSAGE_1 + " 3", QUEUE_MESSAGE_1 + " 4", QUEUE_MESSAGE_1 + " 5"};
-
 
     private static final String INVALID_QUEUE_NAME = "My invalid#queue$name";
     private static final String EMPTY_QUEUE_NAME = " ";
@@ -948,13 +947,13 @@ public class FileQueueTest {
         setupFirstAndSecondQueues();
         Set<QueueMessage> pushedMessagesSetFixture = new HashSet<>();
         Runnable producerFirstQueue = () -> {
-            for (int i=0; i<15; i++) {
+            for (int i=0; i<10; i++) {
                 QueueMessage message = target.push(FIRST_QUEUE_URL, QUEUE_MESSAGE_1 + i);
             }
         };
 
         Runnable producerSecondQueue = () -> {
-            for (int i=0; i<15; i++) {
+            for (int i=0; i<10; i++) {
                 QueueMessage message = target.push(SECOND_QUEUE_URL, QUEUE_MESSAGE_1 + i);
             }
         };
@@ -962,7 +961,7 @@ public class FileQueueTest {
         // When 2 consumers on each queue
         Set<QueueMessage> actualPulledMessagesSet = new HashSet<>();
         Runnable consumerFirstQueue = () -> {
-            for (int i=0; i<15; i++) {
+            for (int i=0; i<10; i++) {
                 QueueMessage message = target.pull(FIRST_QUEUE_URL);
                 if (!message.isEmpty())
                     target.deleteMessage(FIRST_QUEUE_URL, message.getReceiptId());
@@ -970,7 +969,7 @@ public class FileQueueTest {
         };
 
         Runnable consumerSecondQueue = () -> {
-            for (int i=0; i<15; i++) {
+            for (int i=0; i<10; i++) {
                 QueueMessage message = target.pull(SECOND_QUEUE_URL);
                 if (!message.isEmpty())
                     target.deleteMessage(SECOND_QUEUE_URL, message.getReceiptId());
