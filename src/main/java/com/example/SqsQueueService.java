@@ -55,9 +55,9 @@ public class SqsQueueService implements QueueService {
         try {
             queueUrl = sqs.createQueue(createQueueRequest).getQueueUrl();
         } catch (QueueDeletedRecentlyException e) {
-            throw new IllegalStateException(e); // TODO add to interface
+            throw new IllegalStateException(e);
         } catch (QueueNameExistsException e) {
-            throw new IllegalStateException("Unexpected duplicate queue name error in SqsQueueService method createQueue", e); // TODO add to interface
+            throw new IllegalStateException("Unexpected duplicate queue name error in SqsQueueService method createQueue", e);
         }
         return queueUrl;
     }
@@ -96,7 +96,7 @@ public class SqsQueueService implements QueueService {
         } catch (InvalidMessageContentsException e) {
             throw new IllegalArgumentException(e);
         } catch (UnsupportedOperationException e) {
-            throw new java.lang.UnsupportedOperationException(e); // TODO add to interface
+            throw new java.lang.UnsupportedOperationException("Unexpected error in SqsQueueService method push", e);
         }
         // If successful, return message id
         return new QueueMessage(message, sendMessageResult.getMessageId());
@@ -120,8 +120,7 @@ public class SqsQueueService implements QueueService {
         QueueMessage result = new QueueMessage();
 
         for (Message message : messages) {
-            return new QueueMessage(new QueueMessage(message.getBody(), message.getMessageId()),
-                    message.getReceiptHandle(), VISIBILITY_TIMEOUT_EMPTY); // whoops, see notes // TODO add notes
+            return new QueueMessage(message.getBody(), message.getMessageId(), message.getReceiptHandle());
         }
 
         return result;

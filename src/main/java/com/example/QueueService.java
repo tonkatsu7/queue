@@ -41,6 +41,9 @@ public interface QueueService {
      * @throws NullPointerException if the specified queue name is null
      * @throws IllegalArgumentException if the specified queue name is
      *         an empty string
+     * @throws IllegalStateException if the queue was recently deleted
+     *         less than 60 seconds ago or if there was a problem
+     *         creating a queue with a duplicate name
      */
     String createQueue(String queueName);
 

@@ -33,14 +33,15 @@ public class QueueMessage {
      *         an empty string
      */
     public QueueMessage(String messageBody, String messageId) {
-//        checkNotNull(messageBody, "Message body cannot be null");
-//        checkArgument(!messageBody.trim().isEmpty(), "Message body cannot be an empty string");
-//        checkNotNull(messageId, "Message ID cannot be null");
-//        checkArgument(!messageId.trim().isEmpty(), "Message ID cannot be an empty string");
-
         this.messageBody = QueueServiceUtil.checkMessageBody(messageBody);
         this.messageId = QueueServiceUtil.checkMessageId(messageId);
         this.receiptId = EMPTY;
+        this.visibilityTimeoutFrom = 0;
+    }
+
+    public QueueMessage(String messageBody, String messageId, String receiptId) {
+        this(messageBody, messageId);
+        this.receiptId = QueueServiceUtil.checkReceiptId(receiptId);
         this.visibilityTimeoutFrom = 0;
     }
 
@@ -56,8 +57,6 @@ public class QueueMessage {
     public QueueMessage(QueueMessage dequeued, String receiptId, long visibilityTimeoutFrom) {
         this(checkNotNull(dequeued, "Dequeued cannot be null").getMessageBody(),
                 dequeued.getMessageId());
-//        checkNotNull(receiptId, "Receipt ID cannot be null");
-//        checkArgument(!receiptId.trim().isEmpty(), "Receipt ID cannot be an empty string");
 
         this.receiptId = QueueServiceUtil.checkReceiptId(receiptId);
 
@@ -77,7 +76,7 @@ public class QueueMessage {
         return receiptId;
     }
 
-    public long getVisibilityTimeoutFrom() { return visibilityTimeoutFrom; }
+    protected long getVisibilityTimeoutFrom() { return visibilityTimeoutFrom; }
 
     /**
      * @return if queue message is empty
