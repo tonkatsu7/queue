@@ -1,15 +1,11 @@
 package com.example;
 
-import com.sun.org.apache.regexp.internal.RE;
 import org.junit.Assert;
 import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.Objects;
 
-/**
- * Created by sipham on 15/12/16.
- */
 public class QueueMessageTest {
     private static final String EMPTY_STRING = "";
     private static final String NULL_STRING = null;

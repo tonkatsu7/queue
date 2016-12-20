@@ -1,14 +1,10 @@
 package com.example;
 
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
-/**
- * Created by sipham on 19/12/16.
- */
 public class QueueServiceUtil {
     protected static final String QUEUE_NAME_CANNOT_BE_NULL = "Queue name cannot be null";
     protected static final String QUEUE_NAME_CANNOT_BE_EMPTY = "Queue name cannot be an empty string";
@@ -58,10 +54,6 @@ public class QueueServiceUtil {
         return receiptId;
     }
 
-    public static String fromUrl(String queueUrl) {
-        return queueUrl.substring(queueUrl.lastIndexOf('/') + 1);
-    }
-
     public static String generateMessageId() {
         return UUID.randomUUID().toString();
     }
@@ -73,8 +65,4 @@ public class QueueServiceUtil {
     public static long now() {
         return System.currentTimeMillis();
     }
-
-//    public static long toMillis(long seconds) {
-//        return TimeUnit.SECONDS.toMillis(seconds);
-//    }
 }

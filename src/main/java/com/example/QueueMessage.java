@@ -2,9 +2,6 @@ package com.example;
 
 import static com.google.common.base.Preconditions.*;
 
-/**
- * Created by sipham on 15/12/16.
- */
 public class QueueMessage {
     private static String EMPTY = "";
 

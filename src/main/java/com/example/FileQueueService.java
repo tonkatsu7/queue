@@ -19,16 +19,17 @@ import java.nio.file.Paths;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.logging.LogManager;
-import java.util.logging.Logger;
 
 public class FileQueueService implements QueueService {
-    static Logger logger = LogManager.getLogManager().getLogger(Logger.GLOBAL_LOGGER_NAME);
-
     // Constants
     private static String MESSAGE_FILE_NAME = "messages";
     private static String TEMP_MESSAGE_FILE_NAME = "messages.temp";
     private static String LOCK_DIR_NAME = ".lock";
+    private static int INT_FLIGHT_INDEX = 0;
+    private static int VISIBILITY_TIMEOUT_INDEX = 1;
+    private static int RECEIPT_ID_INDEX = 2;
+    private static int MESSAGE_ID_INDEX = 3;
+    private static int MESSAGE_BODY_INDEX = 4;
 
     // Fields
     private String rootDir;
@@ -48,7 +49,7 @@ public class FileQueueService implements QueueService {
         checkQueueName(queueName);
 
         /*
-         * Queue is defined as...
+         * Queue is defined on the file system as...
          *
          *             .rootLock
          * <rootDir> / <queueName> / .lock /
@@ -216,6 +217,10 @@ public class FileQueueService implements QueueService {
         return urlPrefix + queueName;
     }
 
+    public static String fromUrl(String queueUrl) {
+        return queueUrl.substring(queueUrl.lastIndexOf('/') + 1);
+    }
+
     private File getRootDir() {
         return Paths.get(rootDir).toFile();
     }
@@ -334,22 +339,22 @@ public class FileQueueService implements QueueService {
             String[] parts = line.split(":");
 
             // e.g. 0:0:614c58b8-c319-4137-a1da-eb0b75fa19a2:02fa4094-2a2d-4677-a1c9-89bf9420cb1a:{"media":"MABJsxUmBps",...}
-            boolean inFlight = (Integer.parseInt(parts[0]) == 1) ? true : false;// [0] in flight 0=false, 1=true
-            long visibilityTimeoutFrom = Long.parseLong(parts[1]);// [1] visibility timeout from
-            String currReceiptId = parts[2];// [2] receipt id
-            QueueMessage message = new QueueMessage(parts[4], parts[3]); // [3] message id, [4] message
+            boolean inFlight = (Integer.parseInt(parts[INT_FLIGHT_INDEX]) == 1) ? true : false;// [0] in flight 0=false, 1=true
+            long visibilityTimeoutFrom = Long.parseLong(parts[VISIBILITY_TIMEOUT_INDEX]);// [1] visibility timeout from
+            String currReceiptId = parts[RECEIPT_ID_INDEX];// [2] receipt id
+            QueueMessage message = new QueueMessage(parts[MESSAGE_BODY_INDEX], parts[MESSAGE_ID_INDEX]); // [3] message id, [4] message
 
-            QueueMessage resultThisLine;
+            QueueMessage resultThisLine; // track the result if processing this line, an empty QueueMessage object indicates that the pull/delete was unsuccessful
 
             if (processDelete) {
-                resultThisLine = processDelete(inFlight, visibilityTimeoutFrom, message, pw, line, currReceiptId, receiptId);
+                resultThisLine = processLineAsDelete(inFlight, visibilityTimeoutFrom, message, pw, line, currReceiptId, receiptId);
             } else {
-                resultThisLine = processPull(inFlight, visibilityTimeoutFrom, pullOrDeleteHasOccurred, message, pw, line);
+                resultThisLine = processLineAsPull(inFlight, visibilityTimeoutFrom, pullOrDeleteHasOccurred, message, pw, line);
             }
 
-            if (!pullOrDeleteHasOccurred && !resultThisLine.isEmpty()) {
+            if (!pullOrDeleteHasOccurred && !resultThisLine.isEmpty()) { // if processing this line has produced a result
                 pullOrDeleteHasOccurred = true;
-                result = resultThisLine;
+                result = resultThisLine; // return either the pulled message or confirm the deleted message
                 if (processDelete) {
                     result = new QueueMessage(resultThisLine, currReceiptId, visibilityTimeoutFrom);
                 }
@@ -359,39 +364,39 @@ public class FileQueueService implements QueueService {
         return result;
     }
 
-    private QueueMessage processPull(boolean inFlight, long visibilityTimeoutFrom, boolean visibleMessageFound, QueueMessage message, PrintWriter pw, String line) {
+    private QueueMessage processLineAsPull(boolean inFlight, long visibilityTimeoutFrom, boolean visibleMessageFound, QueueMessage message, PrintWriter pw, String line) {
         QueueMessage result = new QueueMessage();
 
         if (inFlight) { // in flight
-            if (now() - visibilityTimeoutFrom > visibilityTimeoutMillis) { // visibility timeout has elasped
-                if (!visibleMessageFound) { // newly visibile message returned
+            if (now() - visibilityTimeoutFrom > visibilityTimeoutMillis) { // visibility timeout has elapsed
+                if (!visibleMessageFound) { // return the first re-visible message
                     result = new QueueMessage(message, generateReceiptId(), now());
                 }
                 pw.println(createVisibleQueueRecord(message));
-            } else {
-                pw.println(line); // remains in flight
+            } else { // else if visibility timeout not elapsed then it remains in flight
+                pw.println(line);
             }
-        } else if (!visibleMessageFound && !inFlight) { // we found the first visible message
+        } else if (!visibleMessageFound && !inFlight) { // we found the first visible message that's not in flight
             result = new QueueMessage(message, generateReceiptId(), now());
             pw.println(createInvisibleQueueRecord(result));
-        } else { // and simply reprint the remaining messages
+        } else { // and simply reprint the remaining messages not in flight
             pw.println(line);
         }
         return result;
     }
 
-    private QueueMessage processDelete(boolean inFlight, long visibilityTimeoutFrom, QueueMessage message, PrintWriter pw, String line, String currReceiptId, String receiptId) {
+    private QueueMessage processLineAsDelete(boolean inFlight, long visibilityTimeoutFrom, QueueMessage message, PrintWriter pw, String line, String currReceiptId, String receiptId) {
         QueueMessage result = new QueueMessage();
 
         if (inFlight) { // in flight
-            if (now() - visibilityTimeoutFrom > visibilityTimeoutMillis) { // visibility timeout has elapsed
-                pw.println(createVisibleQueueRecord(message));
-            } else if (currReceiptId.equals(receiptId)) { // if receipt id matches DELETE!
-                result = message;//messageDeleted = true;
+            if (now() - visibilityTimeoutFrom > visibilityTimeoutMillis) { // visibility timeout has elapsed, including perhaps our receipt id
+                pw.println(createVisibleQueueRecord(message)); // so make visible again
+            } else if (currReceiptId.equals(receiptId)) { // if receipt id matches DELETE! cos we're here while visibility has not elapsed
+                result = message;
             } else {
-                pw.println(line); // remains in flight
+                pw.println(line); // else if visibility timeout not elapsed then it remains in flight
             }
-        } else { // and simply reprint the remaining messages
+        } else { // and simply reprint the remaining messages not in flight
             pw.println(line);
         }
         return result;

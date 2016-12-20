@@ -16,15 +16,8 @@ import java.util.Set;
 import java.util.Stack;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.logging.Level;
-import java.util.logging.LogManager;
-import java.util.logging.Logger;
 
 public class InMemoryQueueService implements QueueService {
-    static Logger logger = LogManager.getLogManager().getLogger(Logger.GLOBAL_LOGGER_NAME);
-
-    // Constants
-
     // Fields
     private volatile ConcurrentMap<String, Object> queueLocks; // used as queue locks
     private volatile ConcurrentMap<String, Deque<QueueMessage>> queues; // url > queue
@@ -44,8 +37,6 @@ public class InMemoryQueueService implements QueueService {
         this.urlPrefix = urlPrefix;
         this.pullWaitTimeMillis = pullWaitTimeMillis;
         this.visibilityTimeoutMillis = visibilityTimeoutMillis;
-
-        logger.setLevel(Level.INFO); // DEBUG
     }
 
     // Queue methods
@@ -62,8 +53,6 @@ public class InMemoryQueueService implements QueueService {
                 queues.put(queueUrl, new ArrayDeque<QueueMessage>());
                 invisibleQueues.put(queueUrl, new ArrayDeque<>());
                 queueUrl2Names.put(queueUrl, queueName);
-
-                logger.log(Level.FINE, "Created new queue at " + queueUrl); // DEBUG
             }
         }
 
@@ -105,7 +94,7 @@ public class InMemoryQueueService implements QueueService {
     @Override
     public QueueMessage push(String queueUrl, String message) {
         checkQueueUrl(queueUrl);
-//        checkMessageBody(message);
+        checkMessageBody(message);
 
         QueueMessage pushMessage = new QueueMessage(message, generateMessageId());
 
@@ -130,16 +119,16 @@ public class InMemoryQueueService implements QueueService {
         synchronized (queueLocks.get(queueUrl)) {
             processInvisibleMessages(queueUrl);
 
-            // start timer for wait time for pulling
-            long startTime = now();
+            long startTime = now(); // start timer for wait time for pulling
+
             while (queues.get(queueUrl).isEmpty()) {
                 try {
                     queueLocks.get(queueUrl).wait(50);
                 } catch (InterruptedException e) {
-                    return new QueueMessage();
+                    Throwables.propagate(e); // fatal
                 }
-                // if time elpased is greater than wait time
-                if ((now() - startTime) > pullWaitTimeMillis) {
+
+                if ((now() - startTime) > pullWaitTimeMillis) { // if time elpased is greater than wait time
                     return new QueueMessage();
                 }
             }
@@ -182,19 +171,21 @@ public class InMemoryQueueService implements QueueService {
         return urlPrefix + queueName;
     }
 
+    public static String fromUrl(String queueUrl) {
+        return queueUrl.substring(queueUrl.lastIndexOf('/') + 1);
+    }
+
     private void processInvisibleMessages(String queueUrl) {
         synchronized (queueLocks.get(queueUrl)) {
             // process any messages on the invisible queue that have elapsed past their timeout and put back onto the head of the main queue
-            Stack<QueueMessage> visibleAgain = new Stack<>();
+            Stack<QueueMessage> visibleAgain = new Stack<>(); // via a temporary stack because want to enqueue onto the head of the main queue in as close to original FIFO order as possible
 
-            QueueMessage invisibleMessage;
-
-            while ((invisibleMessage = invisibleQueues.get(queueUrl).peek()) != null) {
+            for (QueueMessage invisibleMessage = invisibleQueues.get(queueUrl).peek(); invisibleMessage != null; invisibleMessage = invisibleQueues.get(queueUrl).peek()) {
                 if (now() - invisibleMessage.getVisibilityTimeoutFrom() > visibilityTimeoutMillis) {
                     // if the message on the head of the invisible queue's visibility timeout has elapsed, dequeue and push onto temp stack
                     visibleAgain.push(invisibleQueues.get(queueUrl).poll());
                 } else {
-                    break; // if the the message on the head's visibility timeout is still valid then stop
+                    break; // if the the message on the head's invisible queu is still valid then stop
                 }
             }
 
