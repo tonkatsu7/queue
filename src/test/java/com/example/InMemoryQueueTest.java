@@ -1,14 +1,27 @@
 package com.example;
 
+import jdk.nashorn.internal.codegen.CompilerConstants;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.Ignore;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 public class InMemoryQueueTest {
     private static final long PULL_WAIT_TIME_MILLIS = 100L;
@@ -63,6 +76,16 @@ public class InMemoryQueueTest {
         }
     }
 
+    private QueueMessage setupAPulledMessageForTheFirstQueue() {
+        target.push(FIRST_QUEUE_URL, QUEUE_MESSAGE_1);
+        return target.pull(FIRST_QUEUE_URL);
+    }
+
+    private QueueMessage setupAPulledMessageForTheSecondQueue() {
+        target.push(SECOND_QUEUE_URL, SECOND_QUEUE_NAME + QUEUE_MESSAGE_1);
+        return target.pull(SECOND_QUEUE_URL);
+    }
+
     // Method: String createQueue(String queueName);
 
     @Test
@@ -71,12 +94,6 @@ public class InMemoryQueueTest {
 
         // When create queue with a valid name
         String actualQueueUrl = target.createQueue(FIRST_QUEUE_NAME);
-
-        // DEBUG
-//        for (String url : target.listQueues()
-//             ) {
-//            System.out.println(url);
-//        }
 
         // Then a string representing the queue URL
         Assert.assertEquals("Queue URL", FIRST_QUEUE_URL, actualQueueUrl);
@@ -139,6 +156,7 @@ public class InMemoryQueueTest {
     public void cannot_create_queue_with_empty_name() {
         // Given a queue service
 
+
         // When create queue with an empty name
         target.createQueue(EMPTY_QUEUE_NAME);
 
@@ -180,13 +198,6 @@ public class InMemoryQueueTest {
         // When list
         Set<String> actualQueueUrls = target.listQueues();
 
-        // DEBUG
-//        System.out.println("***********************");
-//        for (String url:actualQueueUrls
-//             ) {
-//            System.out.println(url);
-//        }
-
         // Then list of queue names is size 2 with correct corresponding queue names
         Assert.assertEquals("Number of queues after creating a 2 queues", 2, actualQueueUrls.size());
         Assert.assertEquals("Newly created queue URLs exists in listing",
@@ -197,7 +208,7 @@ public class InMemoryQueueTest {
     public void service_with_5_queues_returns_list_of_5() {
         // Given a service with 5 queues
         for (String queueName : QUEUE_NAMES
-             ) {
+                ) {
             target.createQueue(queueName);
         }
 
@@ -443,7 +454,7 @@ public class InMemoryQueueTest {
         // When push 5 messages
         Set<String> actualMessageIds = new HashSet<>();
         for (String messageBody : QUEUE_MESSAGES
-             ) {
+                ) {
             actualMessageIds.add(target.push(FIRST_QUEUE_URL, messageBody).getMessageId());
         }
 
@@ -538,7 +549,7 @@ public class InMemoryQueueTest {
     public void can_pull_messages_from_2_queues() {
         // Given a service with 2 queues with 1 message each
         setupFirstAndSecondQueues();
-        QueueMessage pushedToFirstFixture = target.push(FIRST_QUEUE_URL, SECOND_QUEUE_NAME + QUEUE_MESSAGE_1);
+        QueueMessage pushedToFirstFixture = target.push(FIRST_QUEUE_URL, FIRST_QUEUE_NAME + QUEUE_MESSAGE_1);
         QueueMessage pushedToSecondFixture = target.push(SECOND_QUEUE_URL, SECOND_QUEUE_NAME + QUEUE_MESSAGE_1);
 
         // When pull 1 message each from 2 queues
@@ -555,9 +566,9 @@ public class InMemoryQueueTest {
         // Given a service with 5 queues with 5 messages each
         setUp5Queues();
         for (String url : QUEUE_URLS
-             ) {
+                ) {
             for (String messageBody : QUEUE_MESSAGES
-                 ) {
+                    ) {
                 target.push(url, messageBody);
             }
         }
@@ -569,9 +580,9 @@ public class InMemoryQueueTest {
         }
         int i=0;
         for (String url : QUEUE_URLS
-             ) {
+                ) {
             for (String messageBody : QUEUE_MESSAGES
-                 ) {
+                    ) {
                 QueueMessage pulledMessage = target.pull(url);
                 if (!pulledMessage.isEmpty())
                     actualPulledMessageCount[i]++;
@@ -656,8 +667,7 @@ public class InMemoryQueueTest {
     public void can_delete_a_single_message_from_a_single_queue() {
         // Given a service with a single queue and a single pushed then pulled message
         setupFirstQueue();
-        target.push(FIRST_QUEUE_URL, QUEUE_MESSAGE_1);
-        QueueMessage pulledMessageFixture = target.pull(FIRST_QUEUE_URL);
+        QueueMessage pulledMessageFixture = setupAPulledMessageForTheFirstQueue();
 
         // When delete
         boolean actual = target.deleteMessage(FIRST_QUEUE_URL, pulledMessageFixture.getReceiptId());
@@ -671,10 +681,8 @@ public class InMemoryQueueTest {
     public void can_delete_messages_from_2_queues() {
         // Given a service with 2 queues each with 1 message pushed and pulled
         setupFirstAndSecondQueues();
-        target.push(FIRST_QUEUE_URL, FIRST_QUEUE_URL + QUEUE_MESSAGE_1);
-        target.push(SECOND_QUEUE_URL, SECOND_QUEUE_NAME + QUEUE_MESSAGE_1);
-        QueueMessage pulledFromFirstFixture = target.pull(FIRST_QUEUE_URL);
-        QueueMessage pulledFromSecondFixture = target.pull(SECOND_QUEUE_URL);
+        QueueMessage pulledFromFirstFixture = setupAPulledMessageForTheFirstQueue();
+        QueueMessage pulledFromSecondFixture = setupAPulledMessageForTheSecondQueue();
 
         // When delete from each queue
         boolean actualFromFirst = target.deleteMessage(FIRST_QUEUE_URL, pulledFromFirstFixture.getReceiptId());
@@ -695,47 +703,75 @@ public class InMemoryQueueTest {
         // Then
     }
 
-    // TOOD rewrite using a Timer task
     @Test
-    public void cannot_delete_message_after_visibility_timout_elapsed() throws InterruptedException {
+    public void can_delete_message_just_before_visibility_timout_elapsed() throws InterruptedException, ExecutionException {
         // Given a service with a single queue and a single pushed then pulled message
         setupFirstQueue();
-        target.push(FIRST_QUEUE_URL, QUEUE_MESSAGE_1);
-        QueueMessage pulledMessageFixture = target.pull(FIRST_QUEUE_URL);
+        QueueMessage pulledMessageFixture = setupAPulledMessageForTheFirstQueue();
 
-        // DEBUG
-//        System.out.println(pulledMessageFixture);
-        Thread.sleep(VISIBILITY_TIMEOUT_MILLIS);
-
-        // When delete
-        boolean actual = target.deleteMessage(FIRST_QUEUE_URL, pulledMessageFixture.getReceiptId());
-
-        // DEBUG
-        QueueMessage m = target.pull(FIRST_QUEUE_URL);
-//        System.out.println(m);
-//        System.out.println(pulledMessageFixture.equals(m));
+        // When delete after visibility timeout
+        Callable<Object> deleteAfterVisibilityTimeout = () -> {
+            return target.deleteMessage(FIRST_QUEUE_URL, pulledMessageFixture.getReceiptId());
+        };
+        ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(1);
+        ScheduledFuture scheduledFuture = scheduledExecutorService.schedule(deleteAfterVisibilityTimeout,
+                                                                            VISIBILITY_TIMEOUT_MILLIS - 100,
+                                                                            TimeUnit.MILLISECONDS);
+        boolean actualResult = (boolean) scheduledFuture.get();
+        scheduledExecutorService.shutdown();
 
         // Then subsequent pull returns empty message
-        Assert.assertEquals("Delete message operation should be unsuccessful", false, actual);
-        Assert.assertEquals("Pulling again after visibility timeout elapsed should result in same message", pulledMessageFixture, m);
-        Assert.assertEquals("Receipt ID should be different", true, pulledMessageFixture.getReceiptId()!=m.getReceiptId());
-        Assert.assertEquals("New visibility timeout should be later that the first", true, m.getVisibilityTimeoutFrom() > pulledMessageFixture.getVisibilityTimeoutFrom());
+        Assert.assertEquals("Delete message operation should be successful", true, actualResult);
+        Assert.assertEquals("Pulling from a queue of 1 message after a delete should return an empty message", true, target.pull(FIRST_QUEUE_URL).isEmpty());
     }
 
     @Test
-    public void cannot_delete_message_with_incorrect_receipt_id() throws InterruptedException {
+    public void cannot_delete_message_after_visibility_timout_elapsed() throws InterruptedException, ExecutionException {
         // Given a service with a single queue and a single pushed then pulled message
         setupFirstQueue();
-        target.push(FIRST_QUEUE_URL, QUEUE_MESSAGE_1);
-        QueueMessage pulledMessageFixture = target.pull(FIRST_QUEUE_URL);
+        QueueMessage pulledMessageFixture = setupAPulledMessageForTheFirstQueue();
+
+        // When delete after visibility timeout
+        Callable<Object> deleteAfterVisibilityTimeout = () -> {
+            return target.deleteMessage(FIRST_QUEUE_URL, pulledMessageFixture.getReceiptId());
+        };
+        ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(1);
+        ScheduledFuture scheduledFuture = scheduledExecutorService.schedule(deleteAfterVisibilityTimeout,
+                                                                            VISIBILITY_TIMEOUT_MILLIS + 100,
+                                                                            TimeUnit.MILLISECONDS);
+        boolean actualResult = (boolean) scheduledFuture.get();
+        scheduledExecutorService.shutdown();
+
+        QueueMessage actualMessage = target.pull(FIRST_QUEUE_URL);
+        // Then subsequent pull returns empty message
+        Assert.assertEquals("Delete message operation should be unsuccessful", false, actualResult);
+        Assert.assertEquals("Pulling again after visibility timeout elapsed should result in same message", pulledMessageFixture, actualMessage);
+        Assert.assertEquals("Receipt ID should be different", true, pulledMessageFixture.getReceiptId()!=actualMessage.getReceiptId());
+        Assert.assertEquals("New visibility timeout should be later that the first", true, actualMessage.getVisibilityTimeoutFrom() > pulledMessageFixture.getVisibilityTimeoutFrom());
+    }
+
+    @Test
+    public void cannot_delete_message_with_incorrect_receipt_id() throws InterruptedException, ExecutionException {
+        // Given a service with a single queue and a single pushed then pulled message
+        setupFirstQueue();
+        QueueMessage pulledMessageFixture = setupAPulledMessageForTheFirstQueue();
 
         // When delete message with incorrect receipt id
         boolean actual = target.deleteMessage(FIRST_QUEUE_URL, "473249807efdsujfhdsfs7df9dfs");
 
         // Then false
         Assert.assertEquals("Delete message operation should be unsuccessful", false, actual);
-        Thread.sleep(VISIBILITY_TIMEOUT_MILLIS);
-        Assert.assertEquals("Pulling from a queue of 1 message after a unsuccessful once visibility timeout has elapsed should return the same message", pulledMessageFixture, target.pull(FIRST_QUEUE_URL));
+        // Fetch after visibility timeout should pull a message with same message body and message id but different receipt id
+        Callable<QueueMessage> pullAfterVisibilityTimeout = () -> {
+            return target.pull(FIRST_QUEUE_URL);
+        };
+        ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(1);
+        ScheduledFuture scheduledFuture = scheduledExecutorService.schedule(pullAfterVisibilityTimeout,
+                                                                            VISIBILITY_TIMEOUT_MILLIS + 1,
+                                                                            TimeUnit.MILLISECONDS);
+        QueueMessage actualMessage = (QueueMessage) scheduledFuture.get();
+        scheduledExecutorService.shutdown();
+        Assert.assertEquals("Pulling from a queue of 1 message after a unsuccessful once visibility timeout has elapsed should return the same message", pulledMessageFixture, actualMessage);
     }
 
     @Test(expected = IllegalStateException.class)
@@ -752,8 +788,7 @@ public class InMemoryQueueTest {
     public void cannot_delete_message_from_a_non_existent_queues() {
         // Given a service with a single queue and a pushed and pulled message
         setupFirstQueue();
-        target.push(FIRST_QUEUE_URL, QUEUE_MESSAGE_1);
-        QueueMessage pulledMessageFixture = target.pull(FIRST_QUEUE_URL);
+        QueueMessage pulledMessageFixture = setupAPulledMessageForTheFirstQueue();
 
         // When delete message with non-existent queue url but valid receipt it
         target.deleteMessage(FIRST_QUEUE_URL + "_incorrect", pulledMessageFixture.getReceiptId());
@@ -773,8 +808,7 @@ public class InMemoryQueueTest {
     public void cannot_delete_message_with_null_url() {
         // Given a service with a single queue and a pushed and pulled message
         setupFirstQueue();
-        target.push(FIRST_QUEUE_URL, QUEUE_MESSAGE_1);
-        QueueMessage pulledMessageFixture = target.pull(FIRST_QUEUE_URL);
+        QueueMessage pulledMessageFixture = setupAPulledMessageForTheFirstQueue();
 
         // When delete message with null url
         target.deleteMessage(null, pulledMessageFixture.getReceiptId());
@@ -786,8 +820,7 @@ public class InMemoryQueueTest {
     public void cannot_delete_message_with_empty_url() {
         // Given a service with a single queue and a pushed and pulled message
         setupFirstQueue();
-        target.push(FIRST_QUEUE_URL, QUEUE_MESSAGE_1);
-        QueueMessage pulledMessageFixture = target.pull(FIRST_QUEUE_URL);
+        QueueMessage pulledMessageFixture = setupAPulledMessageForTheFirstQueue();
 
         // When delete message with null url
         target.deleteMessage(EMPTY_QUEUE_URL, pulledMessageFixture.getReceiptId());
@@ -807,8 +840,7 @@ public class InMemoryQueueTest {
     public void cannot_delete_message_with_null_receipt_id() {
         // Given a service with a single queue and a pushed and pulled message
         setupFirstQueue();
-        target.push(FIRST_QUEUE_URL, QUEUE_MESSAGE_1);
-        QueueMessage pulledMessageFixture = target.pull(FIRST_QUEUE_URL);
+        QueueMessage pulledMessageFixture = setupAPulledMessageForTheFirstQueue();
 
         // When delete message with null url
         target.deleteMessage(FIRST_QUEUE_URL, null);
@@ -820,8 +852,7 @@ public class InMemoryQueueTest {
     public void cannot_delete_message_with_empty_receipt_id() {
         // Given a service with a single queue and a pushed and pulled message
         setupFirstQueue();
-        target.push(FIRST_QUEUE_URL, QUEUE_MESSAGE_1);
-        QueueMessage pulledMessageFixture = target.pull(FIRST_QUEUE_URL);
+        QueueMessage pulledMessageFixture = setupAPulledMessageForTheFirstQueue();
 
         // When delete message with null url
         target.deleteMessage(EMPTY_QUEUE_URL, " ");
@@ -834,13 +865,12 @@ public class InMemoryQueueTest {
     // Concurrency tests
 
     @Test
-    public void a_single_queue_supports_multiple_producers_and_consumers() throws InterruptedException {
+    public void a_single_queue_supports_multiple_producers_and_consumers() throws InterruptedException, ExecutionException {
         // Given 2 producers producing 9 messages each
         setupFirstQueue();
         Set<QueueMessage> pushedMessagesSetFixture = new HashSet<>();
         Runnable producer = () -> {
-            for (int i=0; i<600; i++) {
-//                pushedMessagesSetFixture.add(target.push(FIRST_QUEUE_URL, QUEUE_MESSAGE_1 + i));
+            for (int i=0; i<15; i++) {
                 target.push(FIRST_QUEUE_URL, QUEUE_MESSAGE_1 + i);
             }
         };
@@ -848,48 +878,32 @@ public class InMemoryQueueTest {
         // When 3 consumers
         Set<QueueMessage> actualPulledMessagesSet = new HashSet<>();
         Runnable consumer = () -> {
-            for (int i=0; i<400; i++) {
-//                QueueMessage message = target.pull(FIRST_QUEUE_URL);
-//                actualPulledMessagesSet.add(message.getReceiptId());
+            for (int i=0; i<15; i++) {
                 QueueMessage message = target.pull(FIRST_QUEUE_URL);
                 if (!message.isEmpty())
                     target.deleteMessage(FIRST_QUEUE_URL, message.getReceiptId());
+
             }
         };
 
         Thread producerThread1 = new Thread(producer, "Producer1");
         Thread producerThread2 = new Thread(producer, "Producer2");
-        Thread producerThread3 = new Thread(producer, "Producer3");
-        Thread producerThread4 = new Thread(producer, "Producer4");
         Thread consumerThread1 = new Thread(consumer, "Consumer1");
         Thread consumerThread2 = new Thread(consumer, "Consumer2");
         Thread consumerThread3 = new Thread(consumer, "Consumer3");
-        Thread consumerThread4 = new Thread(consumer, "Consumer4");
-        Thread consumerThread5 = new Thread(consumer, "Consumer5");
-        Thread consumerThread6 = new Thread(consumer, "Consumer6");
 
         producerThread1.start();
         producerThread2.start();
-        producerThread3.start();
-        producerThread4.start();
         consumerThread1.start();
         consumerThread2.start();
         consumerThread3.start();
-        consumerThread4.start();
-        consumerThread5.start();
-        consumerThread6.start();
 
         producerThread1.join();
         producerThread2.join();
-        producerThread3.join();
-        producerThread4.join();
         consumerThread1.join();
         consumerThread2.join();
         consumerThread3.join();
-        consumerThread4.join();
-        consumerThread5.join();
-        consumerThread6.join();
-
+//
         // Then resulting pulled messages should equal those originally pushed
 //        Assert.assertEquals("The set of pushed messages is a subset of the pulled messages (but likely the equivalent set)",
 //                true, actualPulledMessagesSet.containsAll(pushedMessagesSetFixture));
@@ -900,42 +914,36 @@ public class InMemoryQueueTest {
 
     @Test
     public void multiple_queues_supports_multiple_producers_and_consumers() throws InterruptedException {
-        // Given 2 producers producing 9 messages each
+        // Given 2 producers for 2 queues
         setupFirstAndSecondQueues();
         Set<QueueMessage> pushedMessagesSetFixture = new HashSet<>();
         Runnable producerFirstQueue = () -> {
-            for (int i=0; i<8; i++) {
-//                pushedMessagesSetFixture.add(target.push(FIRST_QUEUE_URL, QUEUE_MESSAGE_1 + i));
+            for (int i=0; i<15; i++) {
                 QueueMessage message = target.push(FIRST_QUEUE_URL, QUEUE_MESSAGE_1 + i);
-//                System.out.println(FIRST_QUEUE_URL + " - P" + i + " : " + message.getMessageId()); // DEBUG
             }
         };
 
         Runnable producerSecondQueue = () -> {
-            for (int i=0; i<8; i++) {
-//                pushedMessagesSetFixture.add(target.push(FIRST_QUEUE_URL, QUEUE_MESSAGE_1 + i));
+            for (int i=0; i<15; i++) {
                 QueueMessage message = target.push(SECOND_QUEUE_URL, QUEUE_MESSAGE_1 + i);
-//                System.out.println(SECOND_QUEUE_URL + " - P" + i + " : " + message.getMessageId()); // DEBUG
             }
         };
 
-        // When 3 consumers
+        // When 2 consumers on each queue
         Set<QueueMessage> actualPulledMessagesSet = new HashSet<>();
         Runnable consumerFirstQueue = () -> {
-            for (int i=0; i<4; i++) {
+            for (int i=0; i<15; i++) {
                 QueueMessage message = target.pull(FIRST_QUEUE_URL);
-                target.deleteMessage(FIRST_QUEUE_URL, message.getReceiptId());
-//                actualPulledMessagesSet.add(message.getReceiptId());
-//                System.out.println(FIRST_QUEUE_URL + " - C" + i + " : " + message.getMessageId()); // DEBUG
+                if (!message.isEmpty())
+                    target.deleteMessage(FIRST_QUEUE_URL, message.getReceiptId());
             }
         };
 
         Runnable consumerSecondQueue = () -> {
-            for (int i=0; i<4; i++) {
+            for (int i=0; i<15; i++) {
                 QueueMessage message = target.pull(SECOND_QUEUE_URL);
-                target.deleteMessage(SECOND_QUEUE_URL, message.getReceiptId());
-//                actualPulledMessagesSet.add(message.getReceiptId());
-//                System.out.println(SECOND_QUEUE_URL + " - C" + i + " : " + message.getMessageId()); // DEBUG
+                if (!message.isEmpty())
+                    target.deleteMessage(SECOND_QUEUE_URL, message.getReceiptId());
             }
         };
 

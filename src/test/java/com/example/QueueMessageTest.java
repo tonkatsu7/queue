@@ -1,5 +1,6 @@
 package com.example;
 
+import com.sun.org.apache.regexp.internal.RE;
 import org.junit.Assert;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -29,7 +30,7 @@ public class QueueMessageTest {
     }
 
     private QueueMessage setupPulledQueueMessage() {
-        return new QueueMessage(setupPushedQueueMessage(), RECEIPT_ID_1, VISIBILITY_TIMEOUT); // TODO
+        return new QueueMessage(setupPushedQueueMessage(), RECEIPT_ID_1, VISIBILITY_TIMEOUT);
     }
 
     // Constructor: QueueMessage()
@@ -165,8 +166,6 @@ public class QueueMessageTest {
         // Then null pointer exception
     }
 
-    // TODO visibility timeout is +1, 0, -1
-
     // Getter: String getMessageBody() has no logic so we won't test
 
     // Getter: String getMessageId() has no logic so we won't test
@@ -213,17 +212,81 @@ public class QueueMessageTest {
 
     // Method: boolean equals(Object obj)
 
-    // empty is equal to empty
+    @Test
+    public void empty_is_equal_to_empty() {
+        // Given 2 empty messages
+        QueueMessage message1Fixture = new QueueMessage();
+        QueueMessage message2Fixture = new QueueMessage();
 
-    // pushed is equal to pushed if body==body and id==id
+        // When equals
+        boolean actual = message1Fixture.equals(message2Fixture);
 
-    // pushed is not equal if body!=body but id==id
+        // Then true
+        Assert.assertEquals("Empty is euqal to empty", true, actual);
+    }
 
-    // pushed is not equal if body==body but id!=id
+    @Test
+    public void same_body_and_message_id_is_equals() {
+        // Given matching bodies and message ids
+        QueueMessage message1Fixture = new QueueMessage(MESSAGE_BODY_1, MESSAGE_ID_1);
+        QueueMessage message2Fixture = new QueueMessage(MESSAGE_BODY_1, MESSAGE_ID_1);
 
-    // pulled is equal to pulled
+        // When equals
+        boolean actual = message1Fixture.equals(message2Fixture);
 
-    // pulled is equal if
+        // Then true
+        Assert.assertEquals("Matching bodies and message IDs should be equal", true, actual);
+    }
 
+    @Test
+    public void same_body_but_different_message_id_is_not_equals() {
+        // Given matching bodies but different message ids
+        QueueMessage message1Fixture = new QueueMessage(MESSAGE_BODY_1, MESSAGE_ID_1);
+        QueueMessage message2Fixture = new QueueMessage(MESSAGE_BODY_1, MESSAGE_ID_1 + "_different");
 
+        // When equals
+        boolean actual = message1Fixture.equals(message2Fixture);
+
+        // Then false
+        Assert.assertEquals("Matching bodies but different message IDs should not be equal", false, actual);
+    }
+
+    @Test
+    public void same_message_id_but_different_body_is_not_equals() {
+        // Given different bodies but matching message ids
+        QueueMessage message1Fixture = new QueueMessage(MESSAGE_BODY_1, MESSAGE_ID_1);
+        QueueMessage message2Fixture = new QueueMessage(MESSAGE_BODY_1 + " different", MESSAGE_ID_1);
+
+        // When equals
+        boolean actual = message1Fixture.equals(message2Fixture);
+
+        // Then false
+        Assert.assertEquals("Matching bodies but different message IDs should not be equal", false, actual);
+    }
+
+    @Test
+    public void same_body_and_message_id_but_different_receipt_id_is_equals() {
+        // Given matching bodies and message ids but different receipt ids
+        QueueMessage message1Fixture = new QueueMessage(new QueueMessage(MESSAGE_BODY_1, MESSAGE_ID_1), RECEIPT_ID_1, VISIBILITY_TIMEOUT);
+        QueueMessage message2Fixture = new QueueMessage(new QueueMessage(MESSAGE_BODY_1, MESSAGE_ID_1), RECEIPT_ID_1 + "_different", VISIBILITY_TIMEOUT);
+
+        // When equals
+        boolean actual = message1Fixture.equals(message2Fixture);
+
+        // Then false
+        Assert.assertEquals("Matching bodies and message IDs but different receipt IDs should be equal", true, actual);
+    }
+
+    @Test
+    public void same_body_and_message_id_but_different_receipt_id_and_different_visibility_timeout_is_equals() {
+        // Given matching bodies and message ids but different visibility timeout
+        QueueMessage message1Fixture = new QueueMessage(new QueueMessage(MESSAGE_BODY_1, MESSAGE_ID_1), RECEIPT_ID_1, VISIBILITY_TIMEOUT);
+        QueueMessage message2Fixture = new QueueMessage(new QueueMessage(MESSAGE_BODY_1, MESSAGE_ID_1), RECEIPT_ID_1, 1);
+
+        // When equals
+        boolean actual = message1Fixture.equals(message2Fixture);
+
+        // Then false
+        Assert.assertEquals("Matching bodies and message IDs but different receipt IDs should be equal", true, actual);
+    }
 }

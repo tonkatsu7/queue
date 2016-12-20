@@ -8,7 +8,6 @@ import static com.google.common.base.Preconditions.*;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -22,7 +21,6 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.logging.LogManager;
 import java.util.logging.Logger;
-import java.util.stream.Collectors;
 
 public class FileQueueService implements QueueService {
     static Logger logger = LogManager.getLogManager().getLogger(Logger.GLOBAL_LOGGER_NAME);
@@ -117,6 +115,7 @@ public class FileQueueService implements QueueService {
 
         String queueName = fromUrl(queueUrl);
         File queueDir = getQueueDir(fromUrl(queueUrl));
+        File messagesFile = getMessagesFile(queueName);
         File queueLock = getQueueLock(queueName);
         File rootLock = getRootLock();
 
@@ -177,66 +176,6 @@ public class FileQueueService implements QueueService {
     public QueueMessage pull(String queueUrl) {
         checkQueueUrl(queueUrl);
 
-//        String queueName = fromUrl(queueUrl);
-//        File messagesFile = getMessagesFile(queueName);
-//        File tempMessagesFile = getTempMessagesFile(queueName);
-//        File queueLock = getQueueLock(queueName);
-//
-//        QueueMessage dequeued = new QueueMessage();
-//
-//        checkState(getQueueDir(queueName).exists(), QUEUE_URL_DOES_NOT_EXIST);
-//
-//        try {
-//            lock(queueLock);
-//
-//            // rename messsages file
-//            messagesFile.renameTo(tempMessagesFile);
-//
-//            // then read from temp file
-//            try (BufferedReader br = new BufferedReader(new FileReader(tempMessagesFile));
-//                 PrintWriter pw = new PrintWriter(new FileWriter(messagesFile, true))
-//            ) {
-//                boolean visibleMessageFound = false;
-//                for (String line = br.readLine(); line != null; line = br.readLine()) {
-//                    String[] parts = line.split(":");
-//
-//                    // e.g. 0:0:614c58b8-c319-4137-a1da-eb0b75fa19a2:02fa4094-2a2d-4677-a1c9-89bf9420cb1a:{"media":"MABJsxUmBps",...}
-//                    boolean inFlight = (Integer.parseInt(parts[0]) == 1) ? true : false;// [0] in flight 0=false, 1=true
-//                    long visibilityTimeoutFrom = Long.parseLong(parts[1]);// [1] visibility timeout from
-//                    String receiptId = parts[2];// [2] receipt id
-//                    QueueMessage message = new QueueMessage(parts[4], parts[3]); // [3] message id, [4] message
-//
-//                    if (inFlight) { // in flight
-//                        long elapsed = now() - visibilityTimeoutFrom;
-////                            System.out.println("pull elapsed=" + elapsed);
-//                        if (elapsed > visibilityTimeoutMillis) { // visibility timeout has elasped
-//                            if (!visibleMessageFound) { // newly visibile message returned
-//                                dequeued = new QueueMessage(message, generateReceiptId(), now());
-//                            }
-//                            pw.println(createVisibleQueueRecord(message));
-//                        } else {
-//                            pw.println(line); // remains in flight
-//                        }
-//                    } else if (!visibleMessageFound && !inFlight) { // we found the first visible message
-//                        visibleMessageFound = true;
-//                        dequeued = new QueueMessage(message, generateReceiptId(), now());
-//                        pw.println(createInvisibleQueueRecord(dequeued));
-//                    } else { // and simply reprint the remaining messages
-//                        pw.println(line);
-//                    }
-//                }
-//            } catch (IOException e) {
-//                Throwables.propagate(e);
-//            } finally {
-//                tempMessagesFile.delete();
-//                unlock(queueLock);
-//            }
-//        } catch (InterruptedException e) {
-//            Throwables.propagate(e);
-//        }
-//
-//        return dequeued;
-
         QueueMessage pulledMessage = new QueueMessage();
 
         // start timer for wait time for pulling
@@ -259,6 +198,92 @@ public class FileQueueService implements QueueService {
         }
 
         return pulledMessage;
+    }
+
+    @Override
+    public boolean deleteMessage(String queueUrl, String receiptId) {
+        checkQueueUrl(queueUrl);
+        checkReceiptId(receiptId);
+
+        QueueMessage deletedMessage = processMessages(queueUrl, true, receiptId);
+
+        return deletedMessage.getReceiptId().equals(receiptId) ? true : false;
+    }
+
+    // Private methods
+
+    private String toUrl(String queueName) {
+        return urlPrefix + queueName;
+    }
+
+    private File getRootDir() {
+        return Paths.get(rootDir).toFile();
+    }
+
+    private File getQueueDir(String queueName) {
+        return Paths.get(rootDir, queueName).toFile();
+    }
+
+    private File getRootLock() {
+        return Paths.get(rootDir, LOCK_DIR_NAME).toFile();
+    }
+
+    private File getMessagesFile(String queueName) {
+        return Paths.get(rootDir, queueName, MESSAGE_FILE_NAME).toFile();
+    }
+
+    private File getTempMessagesFile(String queueName) {
+        return Paths.get(rootDir, queueName, TEMP_MESSAGE_FILE_NAME).toFile();
+    }
+
+    private File getQueueLock(String queueName) {
+        return Paths.get(rootDir, queueName, LOCK_DIR_NAME).toFile();
+    }
+
+    private void lock(File lock) throws InterruptedException {
+        while (!lock.mkdir()) {
+            Thread.sleep(50);
+        }
+    }
+
+    private void unlock(File lock) {
+        lock.delete();
+    }
+
+    private String createVisibleQueueRecord(QueueMessage messageObj) {
+        return createFileQueueRecord(false,
+                0,
+                "",
+                messageObj.getMessageId(),
+                messageObj.getMessageBody());
+    }
+
+    private String createInvisibleQueueRecord(QueueMessage messageObj) {
+        return createFileQueueRecord(true,
+                messageObj.getVisibilityTimeoutFrom(),
+                messageObj.getReceiptId(),
+                messageObj.getMessageId(),
+                messageObj.getMessageBody());
+    }
+
+    private String createFileQueueRecord(boolean inFlight, long visibilityTimeoutMillis, String receiptId, String messageId, String messageBody) {
+        // e.g. 0:0:614c58b8-c319-4137-a1da-eb0b75fa19a2:02fa4094-2a2d-4677-a1c9-89bf9420cb1a:{"media":"MABJsxUmBps",...}
+        // [0] in flight 0=false, 1=true
+        // [1] visibility timeout from
+        // [2] receipt id
+        // [3] message id
+        // [4] message
+        StringBuilder fileRecord = new StringBuilder();
+        fileRecord.append((inFlight) ? 1 : 0 );
+        fileRecord.append(":");
+        fileRecord.append(visibilityTimeoutMillis);
+        fileRecord.append(":");
+        fileRecord.append(receiptId);
+        fileRecord.append(":");
+        fileRecord.append(messageId);
+        fileRecord.append(":");
+        fileRecord.append(messageBody);
+        return fileRecord.toString();
     }
 
     private QueueMessage processMessages(String queueUrl, boolean processDelete, String receiptId) {
@@ -338,8 +363,7 @@ public class FileQueueService implements QueueService {
         QueueMessage result = new QueueMessage();
 
         if (inFlight) { // in flight
-            long elapsed = now() - visibilityTimeoutFrom;
-            if (elapsed > visibilityTimeoutMillis) { // visibility timeout has elasped
+            if (now() - visibilityTimeoutFrom > visibilityTimeoutMillis) { // visibility timeout has elasped
                 if (!visibleMessageFound) { // newly visibile message returned
                     result = new QueueMessage(message, generateReceiptId(), now());
                 }
@@ -360,8 +384,7 @@ public class FileQueueService implements QueueService {
         QueueMessage result = new QueueMessage();
 
         if (inFlight) { // in flight
-            long elapsed = now() - visibilityTimeoutFrom;
-            if (elapsed > visibilityTimeoutMillis) { // visibility timeout has elapsed
+            if (now() - visibilityTimeoutFrom > visibilityTimeoutMillis) { // visibility timeout has elapsed
                 pw.println(createVisibleQueueRecord(message));
             } else if (currReceiptId.equals(receiptId)) { // if receipt id matches DELETE!
                 result = message;//messageDeleted = true;
@@ -372,149 +395,5 @@ public class FileQueueService implements QueueService {
             pw.println(line);
         }
         return result;
-    }
-
-    @Override
-    public boolean deleteMessage(String queueUrl, String receiptId) {
-        checkQueueUrl(queueUrl);
-        checkReceiptId(receiptId);
-
-        QueueMessage deletedMessage = processMessages(queueUrl, true, receiptId);
-
-        return deletedMessage.getReceiptId().equals(receiptId) ? true : false;
-
-//        String queueName = fromUrl(queueUrl);
-//        File messagesFile = getMessagesFile(queueName);
-//        File tempMessagesFile = getTempMessagesFile(queueName);
-//        File queueLock = getQueueLock(queueName);
-//
-//        QueueMessage dequeued = new QueueMessage();
-//
-//        checkState(getQueueDir(queueName).exists(), QUEUE_URL_DOES_NOT_EXIST);
-//
-//        boolean messageDeleted = false;
-//
-//        try {
-//            lock(queueLock);
-//
-//            // rename messsages file
-//            messagesFile.renameTo(tempMessagesFile);
-//
-//            // then read from temp file
-//            try (BufferedReader br = new BufferedReader(new FileReader(tempMessagesFile));
-//                 PrintWriter pw = new PrintWriter(new FileWriter(messagesFile, true))
-//            ) {
-//
-//                for (String line = br.readLine(); line != null; line = br.readLine()) {
-//                    String[] parts = line.split(":");
-//
-//                    // e.g. 0:0:614c58b8-c319-4137-a1da-eb0b75fa19a2:02fa4094-2a2d-4677-a1c9-89bf9420cb1a:{"media":"MABJsxUmBps",...}
-//                    boolean inFlight = (Integer.parseInt(parts[0]) == 1) ? true : false;// [0] in flight 0=false, 1=true
-//                    long visibilityTimeoutFrom = Long.parseLong(parts[1]);// [1] visibility timeout from
-//                    String currReceiptId = parts[2];// [2] receipt id
-//                    QueueMessage message = new QueueMessage(parts[4], parts[3]); // [3] message id, [4] message
-//
-//                    if (inFlight) { // in flight
-//                        long elapsed = now() - visibilityTimeoutFrom;
-////                        System.out.println("delete elapsed=" + elapsed);
-//                        if (elapsed > visibilityTimeoutMillis) { // visibility timeout has elapsed
-//                            pw.println(createVisibleQueueRecord(message));
-//                        } else if (currReceiptId.equals(receiptId)) { // if receipt id matches
-//                            messageDeleted = true;
-//                        } else {
-//                            pw.println(line); // remains in flight
-//                        }
-//                    } else { // and simply reprint the remaining messages
-//                        pw.println(line);
-//                    }
-//                }
-//            } catch (IOException e) {
-//                Throwables.propagate(e);
-//            } finally {
-//                tempMessagesFile.delete();
-//                unlock(queueLock);
-//            }
-//        } catch (InterruptedException e) {
-//            Throwables.propagate(e);
-//        }
-//
-//        return messageDeleted;
-    }
-
-    // Private methods
-
-    private String toUrl(String queueName) {
-        return urlPrefix + queueName;
-    }
-
-    private File getRootDir() {
-        return Paths.get(rootDir).toFile();
-    }
-
-    private File getQueueDir(String queueName) {
-        return Paths.get(rootDir, queueName).toFile();
-    }
-
-    private File getRootLock() {
-        return Paths.get(rootDir, LOCK_DIR_NAME).toFile();
-    }
-
-    private File getMessagesFile(String queueName) {
-        return Paths.get(rootDir, queueName, MESSAGE_FILE_NAME).toFile();
-    }
-
-    private File getTempMessagesFile(String queueName) {
-        return Paths.get(rootDir, queueName, TEMP_MESSAGE_FILE_NAME).toFile();
-    }
-
-    private File getQueueLock(String queueName) {
-        return Paths.get(rootDir, queueName, LOCK_DIR_NAME).toFile();
-    }
-
-    private void lock(File lock) throws InterruptedException {
-        while (!lock.mkdir()) {
-            Thread.sleep(50);
-        }
-    }
-
-    private void unlock(File lock) {
-        lock.delete();
-    }
-
-    private String createVisibleQueueRecord(QueueMessage messageObj) {
-        return createFileQueueRecord(false,
-                0,
-                "",
-                messageObj.getMessageId(),
-                messageObj.getMessageBody());
-    }
-
-    private String createInvisibleQueueRecord(QueueMessage messageObj) {
-        return createFileQueueRecord(true,
-                messageObj.getVisibilityTimeoutFrom(),
-                messageObj.getReceiptId(),
-                messageObj.getMessageId(),
-                messageObj.getMessageBody());
-    }
-
-    private String createFileQueueRecord(boolean inFlight, long visibilityTimeoutMillis, String receiptId, String messageId, String messageBody) {
-        // e.g. 0:0:614c58b8-c319-4137-a1da-eb0b75fa19a2:02fa4094-2a2d-4677-a1c9-89bf9420cb1a:{"media":"MABJsxUmBps",...}
-        // [0] in flight 0=false, 1=true
-        // [1] visibility timeout from
-        // [2] receipt id
-        // [3] message id
-        // [4] message
-        StringBuilder fileRecord = new StringBuilder();
-        fileRecord.append((inFlight) ? 1 : 0 );
-        fileRecord.append(":");
-        fileRecord.append(visibilityTimeoutMillis);
-        fileRecord.append(":");
-        fileRecord.append(receiptId);
-        fileRecord.append(":");
-        fileRecord.append(messageId);
-        fileRecord.append(":");
-        fileRecord.append(messageBody);
-//        System.out.println(fileRecord.toString());
-        return fileRecord.toString();
     }
 }
