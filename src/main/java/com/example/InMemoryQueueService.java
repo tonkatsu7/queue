@@ -18,7 +18,6 @@ import java.util.stream.Collectors;
 
 public class InMemoryQueueService implements QueueService {
     // Fields
-    private volatile ConcurrentMap<String, Object> queueLocks; // used as queue locks, name > url
     private volatile ConcurrentMap<String, Deque<QueueMessage>> queues; // name > url
     private volatile ConcurrentMap<String, Queue<QueueMessage>> inflightQueues; // name > invisible queue
     private volatile Object mainLock;
@@ -27,7 +26,6 @@ public class InMemoryQueueService implements QueueService {
     private long visibilityTimeoutMillis;
 
     public InMemoryQueueService(String urlPrefix, long pullWaitTimeMillis, long visibilityTimeoutMillis) {
-        queueLocks = new ConcurrentHashMap<>();
         queues = new ConcurrentHashMap<>();
         inflightQueues = new ConcurrentHashMap<>();
         mainLock = new Object();
@@ -46,7 +44,6 @@ public class InMemoryQueueService implements QueueService {
 
         synchronized (mainLock) {
             if (!queues.containsKey(queueName)) {
-                queueLocks.put(queueName, new Object());
                 queues.put(queueName, new ArrayDeque<QueueMessage>());
                 inflightQueues.put(queueName, new ArrayDeque<>());
             }
@@ -77,8 +74,7 @@ public class InMemoryQueueService implements QueueService {
 
         synchronized (mainLock) {
             if (queues.containsKey(queueName)) {
-                synchronized (queueLocks.get(queueName)) {
-                    queueLocks.remove(queueName);
+                synchronized (queues.get(queueName)) {
                     queues.remove(queueName);
                     inflightQueues.remove(queueName);
                 }
@@ -99,9 +95,9 @@ public class InMemoryQueueService implements QueueService {
 
         checkState(queues.containsKey(queueName), QUEUE_URL_DOES_NOT_EXIST);
 
-        synchronized (queueLocks.get(queueName)) {
+        synchronized (queues.get(queueName)) {
             queues.get(queueName).offer(pushMessage);
-            queueLocks.get(queueName).notifyAll();
+            queues.get(queueName).notifyAll();
         }
 
         return pushMessage;
@@ -117,14 +113,14 @@ public class InMemoryQueueService implements QueueService {
 
         checkState(queues.containsKey(queueName), QUEUE_URL_DOES_NOT_EXIST);
 
-        synchronized (queueLocks.get(queueName)) {
+        synchronized (queues.get(queueName)) {
             processInflightMessages(queueName);
 
             long startTime = now(); // start timer for wait time for pulling
 
             while (queues.get(queueName).isEmpty()) {
                 try {
-                    queueLocks.get(queueName).wait(50);
+                    queues.get(queueName).wait(50);
                 } catch (InterruptedException e) {
                     Throwables.propagate(e); // fatal
                 }
@@ -150,13 +146,13 @@ public class InMemoryQueueService implements QueueService {
 
         checkState(queues.containsKey(queueName), QUEUE_URL_DOES_NOT_EXIST);
 
-        synchronized (queueLocks.get(queueName)) {
+        synchronized (queues.get(queueName)) {
             processInflightMessages(queueName);
 
             // Iterate from head (oldest pulled messages) to tail and look for receipt id
-            Iterator<QueueMessage> invisibileIt = inflightQueues.get(queueName).iterator();
-            while (invisibileIt.hasNext()) {
-                QueueMessage message = invisibileIt.next();
+            Iterator<QueueMessage> itr = inflightQueues.get(queueName).iterator();
+            while (itr.hasNext()) {
+                QueueMessage message = itr.next();
                 if (message.getReceiptId().equals(receiptId)) { // case sensitive
                     inflightQueues.get(queueName).remove(message);
                     return true;
@@ -177,7 +173,7 @@ public class InMemoryQueueService implements QueueService {
     }
 
     private void processInflightMessages(String queueName) {
-        synchronized (queueLocks.get(queueName)) {
+        synchronized (queues.get(queueName)) {
             // process any messages on the invisible queue that have elapsed past their timeout and put back onto the head of the main queue
             Stack<QueueMessage> visibleAgain = new Stack<>(); // via a temporary stack because want to enqueue onto the head of the main queue in as close to original FIFO order as possible
 
