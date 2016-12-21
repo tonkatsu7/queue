@@ -67,8 +67,7 @@ public class FileQueueService implements QueueService {
             // if queue name dir doesn't exist
             try {
                 if (!queueDir.exists()) {
-                    // create queue name dir
-                    queueDir.mkdir();
+                    queueDir.mkdir(); // create queue name dir
                     messagesFile.createNewFile();
                 }
             } catch (IOException e) {
@@ -85,7 +84,6 @@ public class FileQueueService implements QueueService {
 
     @Override
     public Set<String> listQueues() {
-        // count the directory names under root dir
         File rootDir = getRootDir();
         File rootLock = getRootLock();
         Set<String> queueUrls = new HashSet<>();
@@ -93,10 +91,10 @@ public class FileQueueService implements QueueService {
 
         try {
             lock(rootLock);
-            directories = rootDir.listFiles(File::isDirectory);
+            directories = rootDir.listFiles(File::isDirectory); // count the directory names under root dir
             for (File dir : directories) {
                 String directory = dir.getName();
-                if (!directory.startsWith(".")) {
+                if (!directory.startsWith(".")) { // omit the main lock
                     queueUrls.add(toUrl(directory));
                 }
             }
@@ -140,7 +138,7 @@ public class FileQueueService implements QueueService {
                     } catch (IOException e) {
                         Throwables.propagate(e);
                     } finally {
-                        unlock(queueLock);
+                        unlock(queueLock); // technically this file will be deleted already previous line?1?
                     }
                 }
             } catch (InterruptedException e) { // interrupted on queue lock
@@ -168,7 +166,7 @@ public class FileQueueService implements QueueService {
         try {
             lock(queueLock);
             try (PrintWriter pw = new PrintWriter(new FileWriter(messagesFile, true))) {
-                pw.println(createVisibleQueueRecord(pushMessage));
+                pw.println(createVisibleQueueRecord(pushMessage)); // append
             } catch (IOException e) {
                 Throwables.propagate(e);
             } finally {
@@ -186,24 +184,23 @@ public class FileQueueService implements QueueService {
 
         QueueMessage pulledMessage = new QueueMessage();
 
-        // start timer for wait time for pulling
-        long startTime = now();
+        long startTime = now(); // start timer for wait time for pulling
 
-        while (pulledMessage.isEmpty()) {
+        do {
             pulledMessage = processMessages(queueUrl, false, null);
-            // block
-            if (pulledMessage.isEmpty()) {
+
+            if (pulledMessage.isEmpty()) { // block
                 try {
                     Thread.sleep(50);
                 } catch (InterruptedException e) {
                     Throwables.propagate(e);
                 }
             }
-            // if time elpased is greater than wait time
-            if ((now() - startTime) > pullWaitTimeMillis) {
+
+            if ((now() - startTime) > pullWaitTimeMillis) { // if time elapsed is greater than wait time
                 break;
             }
-        }
+        } while (pulledMessage.isEmpty());
 
         return pulledMessage;
     }
@@ -311,23 +308,21 @@ public class FileQueueService implements QueueService {
         try {
             lock(queueLock);
 
-            if (messagesFile.length() == 0) {
+            if (messagesFile.length() == 0) { // if no messages then return empty
                 unlock(queueLock);
                 return new QueueMessage();
             }
 
-            // rename messsages file
-            messagesFile.renameTo(tempMessagesFile);
+            messagesFile.renameTo(tempMessagesFile); // rename messsages file
 
-            // then read from temp file
-            try (BufferedReader br = new BufferedReader(new FileReader(tempMessagesFile));
-                 PrintWriter pw = new PrintWriter(new FileWriter(messagesFile, true))
+            try (BufferedReader br = new BufferedReader(new FileReader(tempMessagesFile)); // then read from temp file
+                 PrintWriter pw = new PrintWriter(new FileWriter(messagesFile, true)) // and append to messages file
             ) {
                 pulledOrDeletedMessage = processLines(pw, br, processDelete, receiptId);
             } catch (IOException e) {
                 Throwables.propagate(e);
             } finally {
-                tempMessagesFile.delete();
+                tempMessagesFile.delete(); // clean up temp file
                 unlock(queueLock);
             }
         } catch (InterruptedException e) {
@@ -356,14 +351,14 @@ public class FileQueueService implements QueueService {
             if (processDelete) {
                 resultThisLine = processLineAsDelete(inFlight, visibilityTimeoutFrom, message, pw, line, currReceiptId, receiptId);
             } else {
-                resultThisLine = processLineAsPull(inFlight, visibilityTimeoutFrom, pullOrDeleteHasOccurred, message, pw, line);
+                resultThisLine = processLineAsPull(inFlight, visibilityTimeoutFrom, message, pw, line, pullOrDeleteHasOccurred);
             }
 
             if (!pullOrDeleteHasOccurred && !resultThisLine.isEmpty()) { // if processing this line has produced a result
                 pullOrDeleteHasOccurred = true;
                 result = resultThisLine; // return either the pulled message or confirm the deleted message
                 if (processDelete) {
-                    result = new QueueMessage(resultThisLine, currReceiptId, visibilityTimeoutFrom);
+                    result = new QueueMessage(resultThisLine, currReceiptId, visibilityTimeoutFrom); // recreate original message, a bit messy
                 }
             }
         }
@@ -371,7 +366,7 @@ public class FileQueueService implements QueueService {
         return result;
     }
 
-    private QueueMessage processLineAsPull(boolean inFlight, long visibilityTimeoutFrom, boolean visibleMessageFound, QueueMessage message, PrintWriter pw, String line) {
+    private QueueMessage processLineAsPull(boolean inFlight, long visibilityTimeoutFrom, QueueMessage message, PrintWriter pw, String line, boolean visibleMessageFound) {
         QueueMessage result = new QueueMessage();
 
         if (inFlight) { // in flight
@@ -379,7 +374,7 @@ public class FileQueueService implements QueueService {
                 if (!visibleMessageFound) { // return the first re-visible message
                     result = new QueueMessage(message, generateReceiptId(), now());
                 }
-                pw.println(createVisibleQueueRecord(message));
+                pw.println(createVisibleQueueRecord(message)); // and make visible again
             } else { // else if visibility timeout not elapsed then it remains in flight
                 pw.println(line);
             }
@@ -398,8 +393,8 @@ public class FileQueueService implements QueueService {
         if (inFlight) { // in flight
             if (now() - visibilityTimeoutFrom > visibilityTimeoutMillis) { // visibility timeout has elapsed, including perhaps our receipt id
                 pw.println(createVisibleQueueRecord(message)); // so make visible again
-            } else if (currReceiptId.equals(receiptId)) { // if receipt id matches DELETE! cos we're here while visibility has not elapsed
-                result = message;
+            } else if (currReceiptId.equals(receiptId)) { // if receipt id matches then DELETE! cos we're here while visibility has not elapsed
+                result = message; // return the deleted message
             } else {
                 pw.println(line); // else if visibility timeout not elapsed then it remains in flight
             }
