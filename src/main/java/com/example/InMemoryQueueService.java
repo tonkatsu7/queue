@@ -3,8 +3,6 @@ package com.example;
 import static com.example.QueueServiceUtil.*;
 
 import com.google.common.base.Throwables;
-import com.google.common.collect.BiMap;
-import com.google.common.collect.HashBiMap;
 
 import static com.google.common.base.Preconditions.*;
 
@@ -16,23 +14,24 @@ import java.util.Set;
 import java.util.Stack;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.stream.Collectors;
 
 public class InMemoryQueueService implements QueueService {
     // Fields
-    private volatile ConcurrentMap<String, Object> queueLocks; // used as queue locks
-    private volatile ConcurrentMap<String, Deque<QueueMessage>> queues; // url > queue
-    private volatile ConcurrentMap<String, Queue<QueueMessage>> invisibleQueues; // url > invisible queue
-    private volatile BiMap<String, String> queueUrl2Names; // url > name
+    private volatile ConcurrentMap<String, Object> queueLocks; // used as queue locks, name > url
+    private volatile ConcurrentMap<String, Deque<QueueMessage>> queues; // name > url
+    private volatile ConcurrentMap<String, Queue<QueueMessage>> inflightQueues; // name > invisible queue
+//    private volatile BiMap<String, String> queueUrl2Names; // name > url
     private volatile Object mainLock;
     private String urlPrefix;
     private long pullWaitTimeMillis;
     private long visibilityTimeoutMillis;
 
     public InMemoryQueueService(String urlPrefix, long pullWaitTimeMillis, long visibilityTimeoutMillis) {
-        queueLocks = new ConcurrentHashMap<>(); // used as queueLocks
-        queues = new ConcurrentHashMap<>(); // queue name > queue
-        invisibleQueues = new ConcurrentHashMap<>();
-        queueUrl2Names = HashBiMap.create(); // queue name > url
+        queueLocks = new ConcurrentHashMap<>();
+        queues = new ConcurrentHashMap<>();
+        inflightQueues = new ConcurrentHashMap<>();
+//        queueUrl2Names = HashBiMap.create();
         mainLock = new Object();
         this.urlPrefix = urlPrefix;
         this.pullWaitTimeMillis = pullWaitTimeMillis;
@@ -48,11 +47,11 @@ public class InMemoryQueueService implements QueueService {
         String queueUrl = toUrl(queueName);
 
         synchronized (mainLock) {
-            if (!queues.containsKey(queueUrl)) {
-                queueLocks.put(queueUrl, new Object());
-                queues.put(queueUrl, new ArrayDeque<QueueMessage>());
-                invisibleQueues.put(queueUrl, new ArrayDeque<>());
-                queueUrl2Names.put(queueUrl, queueName);
+            if (!queues.containsKey(queueName)) {
+                queueLocks.put(queueName, new Object());
+                queues.put(queueName, new ArrayDeque<QueueMessage>());
+                inflightQueues.put(queueName, new ArrayDeque<>());
+//                queueUrl2Names.put(queueName, queueName);
             }
         }
 
@@ -61,31 +60,36 @@ public class InMemoryQueueService implements QueueService {
 
     @Override
     public Set<String> listQueues() {
-        return queues.keySet();
+//        return queues.keySet().;
+        return queues.keySet().stream().map( queueName -> toUrl(queueName)).collect(Collectors.toSet());
     }
 
     @Override
     public String getQueueUrl(String queueName) {
         checkQueueName(queueName);
 
-        checkState(queueUrl2Names.values().contains(queueName), QUEUE_NAME_DOES_NOT_EXIST);
+//        checkState(queueUrl2Names.values().contains(queueName), QUEUE_NAME_DOES_NOT_EXIST);
+        checkState(queues.containsKey(queueName), QUEUE_NAME_DOES_NOT_EXIST);
 
-        synchronized (mainLock) {
-            return queueUrl2Names.inverse().get(queueName);
-        }
+//        synchronized (mainLock) {
+//            return queueUrl2Names.inverse().get(queueName);
+//        }
+        return toUrl(queueName);
     }
 
     @Override
     public void deleteQueue(String queueUrl) {
         checkQueueUrl(queueUrl);
 
+        String queueName = fromUrl(queueUrl);
+
         synchronized (mainLock) {
-            if (queues.containsKey(queueUrl)) {
-                synchronized (queueLocks.get(queueUrl)) {
-                    queueLocks.remove(queueUrl);
-                    queues.remove(queueUrl);
-                    invisibleQueues.remove(queueUrl);
-                    queueUrl2Names.remove(queueUrl);
+            if (queues.containsKey(queueName)) {
+                synchronized (queueLocks.get(queueName)) {
+                    queueLocks.remove(queueName);
+                    queues.remove(queueName);
+                    inflightQueues.remove(queueName);
+//                    queueUrl2Names.remove(queueUrl);
                 }
             }
         }
@@ -98,13 +102,15 @@ public class InMemoryQueueService implements QueueService {
         checkQueueUrl(queueUrl);
         checkMessageBody(message);
 
+        String queueName = fromUrl(queueUrl);
+
         QueueMessage pushMessage = new QueueMessage(message, generateMessageId());
 
-        checkState(queues.containsKey(queueUrl), QUEUE_URL_DOES_NOT_EXIST);
+        checkState(queues.containsKey(queueName), QUEUE_URL_DOES_NOT_EXIST);
 
-        synchronized (queueLocks.get(queueUrl)) {
-            queues.get(queueUrl).offer(pushMessage);
-            queueLocks.get(queueUrl).notifyAll();
+        synchronized (queueLocks.get(queueName)) {
+            queues.get(queueName).offer(pushMessage);
+            queueLocks.get(queueName).notifyAll();
         }
 
         return pushMessage;
@@ -114,31 +120,31 @@ public class InMemoryQueueService implements QueueService {
     public QueueMessage pull(String queueUrl) {
         checkQueueUrl(queueUrl);
 
-        checkState(queues.containsKey(queueUrl), QUEUE_URL_DOES_NOT_EXIST);
+        String queueName = fromUrl(queueUrl);
 
         QueueMessage dequeued;
 
-        synchronized (queueLocks.get(queueUrl)) {
-            processInvisibleMessages(queueUrl);
+        checkState(queues.containsKey(queueName), QUEUE_URL_DOES_NOT_EXIST);
+
+        synchronized (queueLocks.get(queueName)) {
+            processInflightMessages(queueName);
 
             long startTime = now(); // start timer for wait time for pulling
 
-            while (queues.get(queueUrl).isEmpty()) {
+            while (queues.get(queueName).isEmpty()) {
                 try {
-                    queueLocks.get(queueUrl).wait(50);
+                    queueLocks.get(queueName).wait(50);
                 } catch (InterruptedException e) {
                     Throwables.propagate(e); // fatal
                 }
-
                 if ((now() - startTime) > pullWaitTimeMillis) { // if time elpased is greater than wait time
                     return new QueueMessage();
                 }
             }
-            // queue message with visibility timeout timestamp
-            dequeued = new QueueMessage(queues.get(queueUrl).poll(), generateReceiptId(), now());
-            // push onto invisible queue
-            invisibleQueues.get(queueUrl).offer(dequeued);
 
+            dequeued = new QueueMessage(queues.get(queueName).poll(), generateReceiptId(), now()); // queue message with visibility timeout timestamp
+
+            inflightQueues.get(queueName).offer(dequeued); // push onto invisible queue
         }
 
         return dequeued;
@@ -149,17 +155,19 @@ public class InMemoryQueueService implements QueueService {
         checkQueueUrl(queueUrl);
         checkReceiptId(receiptId);
 
-        checkState(queues.containsKey(queueUrl), QUEUE_URL_DOES_NOT_EXIST);
+        String queueName = fromUrl(queueUrl);
 
-        synchronized (queueLocks.get(queueUrl)) {
-            processInvisibleMessages(queueUrl);
+        checkState(queues.containsKey(queueName), QUEUE_URL_DOES_NOT_EXIST);
+
+        synchronized (queueLocks.get(queueName)) {
+            processInflightMessages(queueName);
 
             // Iterate from head (oldest pulled messages) to tail and look for receipt id
-            Iterator<QueueMessage> invisibileIt = invisibleQueues.get(queueUrl).iterator();
+            Iterator<QueueMessage> invisibileIt = inflightQueues.get(queueName).iterator();
             while (invisibileIt.hasNext()) {
                 QueueMessage message = invisibileIt.next();
                 if (message.getReceiptId().equals(receiptId)) { // case sensitive
-                    invisibleQueues.get(queueUrl).remove(message);
+                    inflightQueues.get(queueName).remove(message);
                     return true;
                 }
             }
@@ -177,15 +185,15 @@ public class InMemoryQueueService implements QueueService {
         return queueUrl.substring(queueUrl.lastIndexOf('/') + 1);
     }
 
-    private void processInvisibleMessages(String queueUrl) {
-        synchronized (queueLocks.get(queueUrl)) {
+    private void processInflightMessages(String queueName) {
+        synchronized (queueLocks.get(queueName)) {
             // process any messages on the invisible queue that have elapsed past their timeout and put back onto the head of the main queue
             Stack<QueueMessage> visibleAgain = new Stack<>(); // via a temporary stack because want to enqueue onto the head of the main queue in as close to original FIFO order as possible
 
-            for (QueueMessage invisibleMessage = invisibleQueues.get(queueUrl).peek(); invisibleMessage != null; invisibleMessage = invisibleQueues.get(queueUrl).peek()) {
+            for (QueueMessage invisibleMessage = inflightQueues.get(queueName).peek(); invisibleMessage != null; invisibleMessage = inflightQueues.get(queueName).peek()) {
                 if (now() - invisibleMessage.getVisibilityTimeoutFrom() > visibilityTimeoutMillis) {
                     // if the message on the head of the invisible queue's visibility timeout has elapsed, dequeue and push onto temp stack
-                    visibleAgain.push(invisibleQueues.get(queueUrl).poll());
+                    visibleAgain.push(inflightQueues.get(queueName).poll());
                 } else {
                     break; // if the the message on the head's invisible queu is still valid then stop
                 }
@@ -193,7 +201,7 @@ public class InMemoryQueueService implements QueueService {
 
             // finally pop from the temp stack and add to the head of the regular queue
             while (!visibleAgain.empty()) {
-                queues.get(queueUrl).addFirst(visibleAgain.pop());
+                queues.get(queueName).addFirst(visibleAgain.pop());
             }
         }
     }

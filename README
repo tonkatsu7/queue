@@ -1,7 +1,7 @@
 Developer notes
 ---------------
 
-I decided to define the Queue Service interface to include the queue create, list, get (url) and delete methods because
+Hi Canva, I decided to define the Queue Service interface to include the queue create, list, get (url) and delete methods because
 as a fake for SQS they seems pretty sensible behaviours to include alongside the ususal push, pull and delete message.
 
 - I didn't notice until impelementing the adapter in question 4 that deleteMessage doesn't return a result, I though it

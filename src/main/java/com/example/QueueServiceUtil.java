@@ -65,4 +65,8 @@ public class QueueServiceUtil {
     public static long now() {
         return System.currentTimeMillis();
     }
+
+    public static long nowNano() {
+        return System.nanoTime();
+    }
 }
