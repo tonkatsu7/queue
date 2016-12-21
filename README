@@ -4,13 +4,17 @@ Developer notes
 Hi Canva, I decided to define the Queue Service interface to include the queue create, list, get (url) and delete methods because
 as a fake for SQS they seems pretty sensible behaviours to include alongside the ususal push, pull and delete message.
 
-- I didn't notice until impelementing the adapter in question 4 that deleteMessage doesn't return a result, I though it
+- I didn't notice until implementing the adapter in question 4 that deleteMessage doesn't return a result, I though it
     so that is an inaccuracy of the interface
 
 If I had more time
 
    - I would add validation to the fields for allowable characters in message body as specified by SQS doco
 
-   - I would test the thread safety around the queue create, list and get methods
+   - I would validate all other string arguments i.e. queue name (ends in .fifo), url, receipt id
+
+   - I would test the thread safety around the queue create, list, get url and delete methods
 
    - I would also do more concurrency testing
+
+   - I would try to test behaviours or order and delivery better

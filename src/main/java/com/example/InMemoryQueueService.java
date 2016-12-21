@@ -118,19 +118,6 @@ public class InMemoryQueueService implements QueueService {
         synchronized (messageQueues.get(queueName)) {
             processInflightMessages(queueName);
 
-//            long startTime = now(); // start timer for wait time for pulling
-//
-//            while (messageQueues.get(queueName).isEmpty()) {
-//                try {
-//                    messageQueues.get(queueName).wait(50);
-//                } catch (InterruptedException e) {
-//                    Throwables.propagate(e); // fatal
-//                }
-//                if ((now() - startTime) > pullWaitTimeMillis) { // if time elpased is greater than wait time
-//                    return new QueueMessage();
-//                }
-//            }
-
             try {
                 dequeued = messageQueues.get(queueName).poll(pullWaitTimeMillis, TimeUnit.MILLISECONDS); // blocking poll
                 if ( dequeued != null) {
@@ -169,6 +156,7 @@ public class InMemoryQueueService implements QueueService {
                 }
             }
         }
+
         return false;
     }
 

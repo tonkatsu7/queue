@@ -54,7 +54,7 @@ public class QueueMessage {
      * @throws NullPointerException if the specified receipt ID is null
      * @throws IllegalArgumentException if the specified receipt ID is an empty string
      */
-    public QueueMessage(QueueMessage dequeued, String receiptId, long visibilityTimeoutFrom) {
+    protected QueueMessage(QueueMessage dequeued, String receiptId, long visibilityTimeoutFrom) {
         this(checkNotNull(dequeued, "Dequeued cannot be null").getMessageBody(),
                 dequeued.getMessageId());
 
